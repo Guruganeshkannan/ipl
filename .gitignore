@@ -1,0 +1,10 @@
+.vercel
+.claude
+node_modules
+dist
+server/data/rooms.json
+server/data/rooms.json.tmp
+server/data/photos-report.json
+.env
+.env.local
+*.log

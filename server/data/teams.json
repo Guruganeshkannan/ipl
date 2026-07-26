@@ -1,0 +1,92 @@
+[
+  {
+    "id": "CSK",
+    "name": "Chennai Super Kings",
+    "shortName": "CSK",
+    "color": "#FFCC00",
+    "secondaryColor": "#004BA0",
+    "logo": "🦁",
+    "city": "Chennai"
+  },
+  {
+    "id": "MI",
+    "name": "Mumbai Indians",
+    "shortName": "MI",
+    "color": "#004BA0",
+    "secondaryColor": "#D4AF37",
+    "logo": "🌪️",
+    "city": "Mumbai"
+  },
+  {
+    "id": "RCB",
+    "name": "Royal Challengers Bengaluru",
+    "shortName": "RCB",
+    "color": "#EC1C24",
+    "secondaryColor": "#000000",
+    "logo": "👑",
+    "city": "Bengaluru"
+  },
+  {
+    "id": "KKR",
+    "name": "Kolkata Knight Riders",
+    "shortName": "KKR",
+    "color": "#3A225D",
+    "secondaryColor": "#F3AD14",
+    "logo": "⚔️",
+    "city": "Kolkata"
+  },
+  {
+    "id": "RR",
+    "name": "Rajasthan Royals",
+    "shortName": "RR",
+    "color": "#EA1A85",
+    "secondaryColor": "#254AA5",
+    "logo": "🏰",
+    "city": "Jaipur"
+  },
+  {
+    "id": "SRH",
+    "name": "Sunrisers Hyderabad",
+    "shortName": "SRH",
+    "color": "#F26522",
+    "secondaryColor": "#000000",
+    "logo": "🦅",
+    "city": "Hyderabad"
+  },
+  {
+    "id": "GT",
+    "name": "Gujarat Titans",
+    "shortName": "GT",
+    "color": "#1B2133",
+    "secondaryColor": "#D4AF37",
+    "logo": "⚡",
+    "city": "Ahmedabad"
+  },
+  {
+    "id": "LSG",
+    "name": "Lucknow Super Giants",
+    "shortName": "LSG",
+    "color": "#00AEEF",
+    "secondaryColor": "#A6192E",
+    "logo": "🗡️",
+    "city": "Lucknow"
+  },
+  {
+    "id": "DC",
+    "name": "Delhi Capitals",
+    "shortName": "DC",
+    "color": "#17449B",
+    "secondaryColor": "#D71921",
+    "logo": "🐅",
+    "city": "Delhi"
+  },
+  {
+    "id": "PK",
+    "name": "Punjab Kings",
+    "shortName": "PK",
+    "color": "#DD1D25",
+    "secondaryColor": "#A7A9AC",
+    "logo": "🛡️",
+    "city": "Mohali"
+  }
+]
