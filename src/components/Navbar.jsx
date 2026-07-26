@@ -22,7 +22,7 @@ export default function Navbar({ activeTab, setActiveTab, room, isHost, onToggle
   const getAllowedTabs = () => {
     if (room.status === 'LOBBY') return ['LOBBY'];
     if (room.status === 'AUCTION') return ['LOBBY', 'AUCTION'];
-    if (room.status === 'MATCHES') return ['LOBBY', 'AUCTION', 'MATCHES', 'STANDINGS'];
+    if (room.status === 'PRE_MATCH' || room.status === 'MATCHES') return ['LOBBY', 'AUCTION', 'MATCHES', 'STANDINGS'];
     return ['LOBBY', 'AUCTION', 'MATCHES', 'STANDINGS', 'TROPHY'];
   };
   const allowed = getAllowedTabs();

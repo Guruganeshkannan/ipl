@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Gavel, ChevronDown, Send, X } from 'lucide-react';
+import { Gavel, ChevronDown, Send, X, SkipForward } from 'lucide-react';
 import PlayerAvatar from './primitives/PlayerAvatar';
 
 const ROLE_ICON = { Bowler: '🎯', 'Wicket-Keeper': '🧤', 'All-Rounder': '⚡', Batsman: '🏏' };
+const ROLE_EMOJI = { Bowler: '🎳', 'Wicket-Keeper': '🧤', 'All-Rounder': '⚡', Batsman: '🏏' };
 
-export default function AuctionView({ room, playersById, onPlaceBid, onSendChat, onTogglePause, isHost, onLeave, userTeamId }) {
+export default function AuctionView({ room, playersById, onPlaceBid, onSendChat, onTogglePause, isHost, onLeave, userTeamId, onSkipPlayer }) {
   const [chatInput, setChatInput] = useState('');
   const [showUpcoming, setShowUpcoming] = useState(false);
+  const [showUnsold, setShowUnsold] = useState(false);
   const [bidError, setBidError] = useState(null);
   const [squadTeamId, setSquadTeamId] = useState(null);
   const chatEndRef = useRef(null);
@@ -128,14 +130,41 @@ export default function AuctionView({ room, playersById, onPlaceBid, onSendChat,
           <span style={{ fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{auction.currentSetName || '—'}</span>
         </div>
         <div className="auction-topbar-right">
+          {(auction.unsoldPreview || []).length > 0 && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowUnsold(v => !v)}>
+              Unsold ({auction.unsoldPreview.length}) <ChevronDown size={14} />
+            </button>
+          )}
           <button className="btn btn-ghost btn-sm" onClick={() => setShowUpcoming(v => !v)}>
             Upcoming ({auction.remainingCount}) <ChevronDown size={14} />
           </button>
+          {isHost && isBidding && (
+            <button className="btn btn-danger btn-sm" onClick={onSkipPlayer} title="Force this player to resolve now">
+              <SkipForward size={14} /> Skip
+            </button>
+          )}
           <div className={`auction-timer ${auction.timer <= 5 && auction.timerActive ? 'critical' : ''}`}>
             {auction.timerActive ? auction.timer : '–'}
           </div>
         </div>
       </div>
+
+      {showUnsold && (
+        <div className="upcoming-panel">
+          {(auction.unsoldPreview || []).map(p => (
+            <div key={p.id} className="upcoming-row">
+              <PlayerAvatar player={p} size={32} teamColor="var(--ink-4)" />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-0)' }}>{p.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{ROLE_ICON[p.role]} {p.role} · ₹{p.basePrice} Cr</div>
+              </div>
+            </div>
+          ))}
+          {(!auction.unsoldPreview || auction.unsoldPreview.length === 0) && (
+            <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>No unsold players</div>
+          )}
+        </div>
+      )}
 
       {showUpcoming && (
         <div className="upcoming-panel">
@@ -293,6 +322,7 @@ export default function AuctionView({ room, playersById, onPlaceBid, onSendChat,
 
 function SquadModal({ team, maxSquadSize, onClose }) {
   if (!team) return null;
+  const overseasCount = team.squad.filter(p => p.isOverseas).length;
   return (
     <div className="squad-modal-backdrop" onClick={onClose}>
       <div className="squad-modal" onClick={e => e.stopPropagation()}>
@@ -301,10 +331,14 @@ function SquadModal({ team, maxSquadSize, onClose }) {
             <span style={{ fontSize: 26 }}>{team.logo}</span>
             <div>
               <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 17, color: team.color }}>{team.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{team.ownerName || 'AI bot'} · {team.squad.length}/{maxSquadSize} players · ₹{team.purse.toFixed(2)} Cr left</div>
+              <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{team.ownerName || 'AI bot'} · ₹{team.purse.toFixed(2)} Cr left</div>
             </div>
           </div>
           <button className="navbar-icon-btn" onClick={onClose} title="Close"><X size={15} /></button>
+        </div>
+        <div style={{ display: 'flex', gap: 8, padding: '10px 18px', borderBottom: '1px solid var(--line-1)' }}>
+          <span className="badge badge-info">{team.squad.length}/{maxSquadSize} players</span>
+          <span className="badge badge-muted">✈ {overseasCount} overseas</span>
         </div>
         <div className="squad-modal-list">
           {team.squad.length === 0 && (
@@ -314,8 +348,10 @@ function SquadModal({ team, maxSquadSize, onClose }) {
             <div key={p.id} className="squad-modal-row">
               <PlayerAvatar player={p} size={36} teamColor={team.color} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{ROLE_ICON[p.role]} {p.role}</div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {p.name} {p.isOverseas && <span title="Overseas player">✈</span>}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{ROLE_EMOJI[p.role]} {p.role}</div>
               </div>
               <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 13, color: 'var(--signal)' }}>₹{p.soldPrice.toFixed(2)} Cr</span>
             </div>

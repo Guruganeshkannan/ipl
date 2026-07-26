@@ -29,6 +29,11 @@ export default function TrophyView({ room, onResetRoom, isHost }) {
   const winnerTeam = teams.find(t => t.id === tournament.winnerTeamId) || teams[0];
   if (!winnerTeam) return null;
 
+  const leaderboard = Object.values(tournament.playerStats || {});
+  const orangeCap = [...leaderboard].sort((a, b) => b.runs - a.runs).slice(0, 5);
+  const purpleCap = [...leaderboard].sort((a, b) => b.wickets - a.wickets).slice(0, 5);
+  const teamById = id => teams.find(t => t.id === id);
+
   return (
     <div className="page-wrap" style={{ maxWidth: 700, padding: '40px 20px', textAlign: 'center' }}>
       <div className="card" style={{ padding: 44, position: 'relative', overflow: 'hidden', border: '2px solid var(--signal-line)' }}>
@@ -84,8 +89,39 @@ export default function TrophyView({ room, onResetRoom, isHost }) {
           ))}
         </div>
 
+        {(orangeCap.length > 0 || purpleCap.length > 0) && (
+          <div className="cap-leaderboard">
+            <div className="cap-column">
+              <div className="cap-header cap-orange">🟠 Orange Cap — Most Runs</div>
+              {orangeCap.map((p, i) => {
+                const t = teamById(p.teamId);
+                return (
+                  <div key={p.playerId} className="cap-row">
+                    <span className="cap-rank">{i + 1}</span>
+                    <span className="cap-name">{p.name} <span className="cap-team">{t?.shortName}</span></span>
+                    <span className="cap-value orange">{p.runs}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="cap-column">
+              <div className="cap-header cap-purple">🟣 Purple Cap — Most Wickets</div>
+              {purpleCap.map((p, i) => {
+                const t = teamById(p.teamId);
+                return (
+                  <div key={p.playerId} className="cap-row">
+                    <span className="cap-rank">{i + 1}</span>
+                    <span className="cap-name">{p.name} <span className="cap-team">{t?.shortName}</span></span>
+                    <span className="cap-value purple">{p.wickets}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {isHost && (
-          <button className="btn btn-signal btn-lg" onClick={onResetRoom}>
+          <button className="btn btn-signal btn-lg" onClick={onResetRoom} style={{ marginTop: 28 }}>
             <RefreshCw size={17} /> New IPL season
           </button>
         )}

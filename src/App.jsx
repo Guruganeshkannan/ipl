@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import LobbyView from './components/LobbyView';
 import AuctionView from './components/AuctionView';
 import MatchesView from './components/MatchesView';
+import PreMatchView from './components/PreMatchView';
 import StandingsView from './components/StandingsView';
 import TrophyView from './components/TrophyView';
 
@@ -54,6 +55,7 @@ export default function App() {
       setRoom(updatedRoom);
       const tab = activeTabRef.current;
       if (updatedRoom.status === 'AUCTION' && tab === 'LOBBY') setActiveTab('AUCTION');
+      else if (updatedRoom.status === 'PRE_MATCH' && (tab === 'LOBBY' || tab === 'AUCTION')) setActiveTab('MATCHES');
       else if (updatedRoom.status === 'MATCHES' && (tab === 'LOBBY' || tab === 'AUCTION')) setActiveTab('MATCHES');
       else if (updatedRoom.status === 'FINISHED' && tab === 'MATCHES') setActiveTab('TROPHY');
     });
@@ -162,6 +164,22 @@ export default function App() {
     if (room) socket.emit('selectHandChoice', { roomCode: room.code, matchId, teamId, choice });
   };
 
+  const handleSelectBowler = (matchId, teamId, playerId) => {
+    if (room) socket.emit('selectBowler', { roomCode: room.code, matchId, teamId, playerId });
+  };
+
+  const handleSelectNextBatsman = (matchId, teamId, playerId) => {
+    if (room) socket.emit('selectNextBatsman', { roomCode: room.code, matchId, teamId, playerId });
+  };
+
+  const handleSetTeamReady = () => {
+    if (room && userTeamId) socket.emit('setTeamReady', { roomCode: room.code, teamId: userTeamId });
+  };
+
+  const handleSkipPlayer = () => {
+    if (room) socket.emit('skipCurrentPlayer', { roomCode: room.code, hostToken: getHostToken() });
+  };
+
   const handleTogglePause = () => {
     if (room) socket.emit('togglePauseRoom', { roomCode: room.code, hostToken: getHostToken() });
   };
@@ -246,10 +264,13 @@ export default function App() {
           />
         )}
         {room && activeTab === 'AUCTION' && (
-          <AuctionView room={room} playersById={playersById} onPlaceBid={handlePlaceBid} onSendChat={handleSendChat} onTogglePause={handleTogglePause} isHost={!!isHost} onLeave={handleLeave} userTeamId={userTeamId} />
+          <AuctionView room={room} playersById={playersById} onPlaceBid={handlePlaceBid} onSendChat={handleSendChat} onTogglePause={handleTogglePause} isHost={!!isHost} onLeave={handleLeave} userTeamId={userTeamId} onSkipPlayer={handleSkipPlayer} />
         )}
-        {room && activeTab === 'MATCHES' && (
-          <MatchesView room={room} onSelectChoice={handleSelectChoice} onLeave={handleLeave} userTeamId={userTeamId} />
+        {room && activeTab === 'MATCHES' && room.status === 'PRE_MATCH' && (
+          <PreMatchView room={room} userTeamId={userTeamId} onReady={handleSetTeamReady} />
+        )}
+        {room && activeTab === 'MATCHES' && room.status !== 'PRE_MATCH' && (
+          <MatchesView room={room} onSelectChoice={handleSelectChoice} onLeave={handleLeave} userTeamId={userTeamId} onSelectBowler={handleSelectBowler} onSelectNextBatsman={handleSelectNextBatsman} />
         )}
         {room && activeTab === 'STANDINGS' && (
           <StandingsView room={room} userTeamId={userTeamId} />

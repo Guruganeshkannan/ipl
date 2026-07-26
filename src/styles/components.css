@@ -479,21 +479,32 @@
    Auction stage — detail layout
    ===================================================================== */
 .auction-topbar {
-  height: 56px;
+  min-height: 56px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 8px 20px;
   border-bottom: 1px solid var(--line-1);
   position: relative;
   z-index: 12;
   gap: 12px;
+  flex-wrap: wrap;
 }
 .auction-topbar-left, .auction-topbar-right {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+}
+@media (max-width: 640px) {
+  .auction-topbar { padding: 8px 12px; gap: 8px; }
+  .auction-topbar-left, .auction-topbar-right { gap: 6px; }
+  .auction-topbar-right .btn { padding: 6px 10px; font-size: 11px; }
+}
+@media (max-width: 480px) {
+  .auction-topbar-left { order: 2; flex-basis: 100%; justify-content: center; }
+  .auction-topbar-right { order: 1; flex-basis: 100%; justify-content: space-between; }
 }
 .auction-timer {
   width: 44px;
@@ -739,7 +750,7 @@
 .upcoming-row:hover { background: var(--ink-3); }
 
 @media (max-width: 640px) {
-  .upcoming-panel { width: calc(100vw - 40px); right: 20px; }
+  .upcoming-panel { width: calc(100vw - 24px); right: 12px; top: 96px; max-height: 50vh; }
 }
 
 /* =====================================================================
@@ -749,6 +760,7 @@
   position: fixed;
   top: 62px;
   left: 0; right: 0; bottom: 0;
+  height: calc(100dvh - 62px);
   background-image: linear-gradient(rgba(6,7,8,0.55), rgba(6,7,8,0.75)), url('/stadium_bg.png');
   background-size: cover;
   background-position: center;
@@ -757,10 +769,11 @@
   flex-direction: column;
   justify-content: space-between;
   padding: 24px 32px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 @media (max-width: 640px) {
-  .match-stage { padding: 14px; }
+  .match-stage { padding: 10px; gap: 10px; }
 }
 
 .match-topbar {
@@ -771,6 +784,10 @@
   position: relative;
   z-index: 20;
   flex-wrap: wrap;
+  padding-right: 90px;
+}
+@media (max-width: 640px) {
+  .match-topbar { gap: 8px; padding-right: 0; padding-top: 40px; }
 }
 
 .score-card {
@@ -787,6 +804,13 @@
 }
 .score-card-header { display: flex; align-items: center; gap: 10px; }
 .score-value { font-family: var(--font-display); font-weight: 700; font-size: 30px; color: var(--text-0); text-align: center; }
+@media (max-width: 640px) {
+  .score-card { min-width: 0; flex: 1 1 42%; padding: 10px 12px; gap: 6px; }
+  .score-value { font-size: 22px; }
+}
+@media (max-width: 380px) {
+  .score-card { padding: 8px 10px; }
+}
 
 .match-center-info {
   background: rgba(13, 15, 18, 0.85);
@@ -797,6 +821,18 @@
   text-align: center;
   min-width: 240px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+@media (max-width: 640px) {
+  .match-center-info { min-width: 0; flex: 1 1 100%; order: 3; padding: 8px 14px; }
+}
+
+.match-hand-zone {
+  position: relative;
+  flex: 1;
+  min-height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .match-hand {
@@ -810,9 +846,35 @@
 .match-hand.left { left: -6vw; transform: translateY(-50%); }
 .match-hand.right { right: -6vw; transform: translateY(-50%) scaleX(-1); }
 @media (max-width: 700px) {
-  .match-hand { width: 32vw; }
-  .match-hand.left { left: -10vw; }
-  .match-hand.right { right: -10vw; }
+  .match-hand { width: 34vw; }
+  .match-hand.left { left: 2vw; }
+  .match-hand.right { right: 2vw; }
+}
+@media (max-width: 420px) {
+  .match-hand { width: 38vw; }
+}
+
+/* Shake plays on top of each side's base transform (position + mirroring)
+   via CSS variable offsets, so the hand still shakes toward/away from
+   centre correctly on both the left (un-mirrored) and right (scaleX(-1)) side. */
+.match-hand.left.shaking { animation: handShakeLeft 0.4s ease-in-out; }
+.match-hand.right.shaking { animation: handShakeRight 0.4s ease-in-out; }
+@keyframes handShakeLeft {
+  0%, 100% { transform: translateY(-50%) translateX(0) rotate(0deg); }
+  20% { transform: translateY(-50%) translateX(-6px) rotate(-6deg); }
+  40% { transform: translateY(-50%) translateX(5px) rotate(5deg); }
+  60% { transform: translateY(-50%) translateX(-4px) rotate(-4deg); }
+  80% { transform: translateY(-50%) translateX(3px) rotate(3deg); }
+}
+@keyframes handShakeRight {
+  0%, 100% { transform: translateY(-50%) scaleX(-1) translateX(0) rotate(0deg); }
+  20% { transform: translateY(-50%) scaleX(-1) translateX(-6px) rotate(-6deg); }
+  40% { transform: translateY(-50%) scaleX(-1) translateX(5px) rotate(5deg); }
+  60% { transform: translateY(-50%) scaleX(-1) translateX(-4px) rotate(-4deg); }
+  80% { transform: translateY(-50%) scaleX(-1) translateX(3px) rotate(3deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .match-hand.shaking { animation: none; }
 }
 
 .match-vs {
@@ -820,7 +882,7 @@
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
   font-family: var(--font-display);
-  font-size: clamp(32px, 6vw, 56px);
+  font-size: clamp(28px, 6vw, 56px);
   color: var(--signal);
   text-shadow: 0 0 30px rgba(255, 176, 32, 0.5);
   z-index: 15;
@@ -834,6 +896,10 @@
   position: relative;
   z-index: 20;
   padding-bottom: 8px;
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .match-bottombar { gap: 10px; padding-bottom: 4px; }
 }
 
 .keypad-wrap { position: relative; padding-top: 26px; }
@@ -862,8 +928,11 @@
   flex-shrink: 0;
 }
 @media (max-width: 420px) {
-  .keypad-grid { gap: 6px; }
-  .keypad-btn-img { width: 52px; height: 52px; }
+  .keypad-grid { gap: 6px; max-width: 100%; }
+  .keypad-btn-img { width: 48px; height: 48px; }
+}
+@media (max-width: 340px) {
+  .keypad-btn-img { width: 42px; height: 42px; }
 }
 .keypad-btn-img.active {
   background: var(--signal);
@@ -880,6 +949,10 @@
   padding: 9px 22px;
   font-size: 13px;
   color: var(--text-0);
+  text-align: center;
+}
+@media (max-width: 420px) {
+  .status-pill { padding: 7px 16px; font-size: 12px; }
 }
 
 .leave-game-btn {
@@ -894,8 +967,23 @@
   font-size: 12.5px;
   backdrop-filter: blur(10px);
   transition: background 0.2s;
+  flex-shrink: 0;
 }
 .leave-game-btn:hover { background: rgba(239,68,68,0.5); }
+
+.match-leave-fab {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 25;
+}
+@media (max-width: 640px) {
+  .match-leave-fab { top: 10px; right: 10px; }
+}
+@media (max-width: 420px) {
+  .match-leave-fab span { display: none; }
+  .match-leave-fab { padding: 8px; }
+}
 
 /* ── Spectator grid ── */
 .match-grid-card { padding: 18px; }
@@ -913,6 +1001,198 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 16px;
+}
+
+/* =====================================================================
+   Trophy screen — orange/purple cap leaderboard
+   ===================================================================== */
+.cap-leaderboard {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  text-align: left;
+  margin-bottom: 28px;
+}
+@media (max-width: 560px) {
+  .cap-leaderboard { grid-template-columns: 1fr; }
+}
+.cap-column {
+  background: var(--ink-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+}
+.cap-header {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 12.5px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line-1);
+}
+.cap-header.cap-orange { color: #ff9800; }
+.cap-header.cap-purple { color: #b388ff; }
+.cap-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 12.5px;
+}
+.cap-rank {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--ink-3); color: var(--text-3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; flex-shrink: 0;
+}
+.cap-name { flex: 1; min-width: 0; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-team { color: var(--text-3); font-size: 10.5px; }
+.cap-value { font-family: var(--font-mono); font-weight: 700; flex-shrink: 0; }
+.cap-value.orange { color: #ff9800; }
+.cap-value.purple { color: #b388ff; }
+
+/* =====================================================================
+   Match summary — broadcast scorecard shown when a match completes
+   ===================================================================== */
+.summary-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+.summary-card {
+  width: 100%;
+  max-width: 460px;
+  background: var(--ink-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+  padding: 20px;
+  margin: auto;
+}
+.summary-title-bar {
+  text-align: center;
+  margin-bottom: 16px;
+}
+.summary-subtitle {
+  display: block;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text-0);
+  margin-top: 4px;
+}
+.summary-innings {
+  border: 1px solid var(--line-1);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.summary-innings-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  color: #0a0a0a;
+}
+.summary-team-name {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 14px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.summary-overs { font-size: 11px; font-weight: 600; opacity: 0.75; }
+.summary-score { font-family: var(--font-mono); font-weight: 800; font-size: 18px; }
+.summary-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--ink-1);
+}
+.summary-col { padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+.summary-col:first-child { border-right: 1px solid var(--line-1); }
+.summary-row { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+.summary-name { color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.summary-value { font-family: var(--font-mono); font-weight: 700; flex-shrink: 0; }
+.summary-value.bat { color: var(--signal); }
+.summary-value.bowl { color: var(--info-cyan); }
+.summary-row-empty { color: var(--text-3); font-size: 12px; }
+.summary-result-bar {
+  text-align: center;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--win-green);
+  background: var(--win-green-dim);
+  border: 1px solid rgba(34,197,94,0.3);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+}
+@media (max-width: 480px) {
+  .summary-card { padding: 14px; }
+  .summary-team-name { font-size: 12.5px; }
+  .summary-score { font-size: 15px; }
+}
+
+/* =====================================================================
+   Bowler / batsman selection overlays
+   ===================================================================== */
+.picker-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: rgba(6,7,8,0.9);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.picker-card {
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--ink-2);
+  border: 1px solid var(--signal-line);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.picker-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-2);
+  background: var(--ink-1);
+  color: var(--text-0);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 13px;
+}
+.picker-row:disabled { opacity: 0.35; cursor: not-allowed; }
+.picker-row:not(:disabled):hover { border-color: var(--signal-line); background: var(--signal-dim); }
+
+.prematch-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .prematch-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 900px) {

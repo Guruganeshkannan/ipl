@@ -1,10 +1,74 @@
 import React, { useState, useEffect } from 'react';
 import { PauseCircle, LogOut } from 'lucide-react';
+import MatchSummary from './MatchSummary';
+import PlayerAvatar from './primitives/PlayerAvatar';
 
 const MOVE_AUTO_PICK_TICKS = 15;
+const ROLE_EMOJI = { Bowler: '🎳', 'Wicket-Keeper': '🧤', 'All-Rounder': '⚡', Batsman: '🏏' };
 
-export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId }) {
+function BowlerPicker({ match, team, cap, onSelect }) {
+  const bowled = match.bowlerOversBowled[team.id] || {};
+  return (
+    <div className="picker-overlay">
+      <div className="picker-card">
+        <span className="eyebrow">SELECT YOUR BOWLER</span>
+        <h3 style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 18, color: 'var(--text-0)', marginTop: 6 }}>Who bowls this over?</h3>
+        <div className="picker-list">
+          {team.squad.map(p => {
+            const overs = bowled[p.id] || 0;
+            const maxed = overs >= cap;
+            return (
+              <button key={p.id} className="picker-row" disabled={maxed} onClick={() => onSelect(p.id)}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <PlayerAvatar player={p} size={28} teamColor={team.color} />
+                  {p.name} <span style={{ opacity: 0.6 }}>{ROLE_EMOJI[p.role]}</span>
+                </span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-3)' }}>{overs}/{cap} ov</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BatsmanPicker({ match, team, onSelect }) {
+  const order = match.battingOrder[team.id] || [];
+  const stats = match.playerStats;
+  return (
+    <div className="picker-overlay">
+      <div className="picker-card">
+        <span className="eyebrow">WICKET!</span>
+        <h3 style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 18, color: 'var(--text-0)', marginTop: 6 }}>Who's coming in to bat?</h3>
+        <div className="picker-list">
+          {order.filter(id => !stats[id]?.out).map(id => {
+            const p = team.squad.find(sp => sp.id === id);
+            if (!p) return null;
+            return (
+              <button key={id} className="picker-row" onClick={() => onSelect(id)}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <PlayerAvatar player={p} size={28} teamColor={team.color} />
+                  {p.name} <span style={{ opacity: 0.6 }}>{ROLE_EMOJI[p.role]}</span>
+                </span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--signal)' }}>{stats[id]?.runs || 0} runs</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId, onSelectBowler, onSelectNextBatsman }) {
   const [localChoice, setLocalChoice] = useState(null);
+  const [dismissedSummaryId, setDismissedSummaryId] = useState(null);
+  // 'closed' between balls, 'revealed' once the ball has resolved and the
+  // hands show their numbers — resets to closed at the start of every ball.
+  const [revealPhase, setRevealPhase] = useState('closed');
+  const [oppShaking, setOppShaking] = useState(false);
+  const [myShaking, setMyShaking] = useState(false);
 
   const tournament = room?.tournament;
   const teams = room?.teams;
@@ -19,7 +83,25 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId 
   // (lastBatChoice/lastBowlChoice change) or the match id changes.
   useEffect(() => {
     setLocalChoice(null);
+    setRevealPhase('revealed');
+    // Snap back to closed fists shortly after reveal so the next ball starts
+    // from a clean "closed hand" state instead of showing stale numbers.
+    const t = setTimeout(() => setRevealPhase('closed'), 900);
+    return () => clearTimeout(t);
   }, [userMatch?.lastBatChoice, userMatch?.lastBowlChoice, userMatch?.id]);
+
+  // The opponent's hand only has something to shake for once we know they've
+  // locked in a choice (their pending pick is masked to 'HIDDEN' by the
+  // server, so this is the only signal we get before the ball resolves).
+  const oppChoiceField = userMatch && userTeamId === userMatch.team1Id ? 'team2Choice' : 'team1Choice';
+  const oppPending = userMatch?.interactiveInput?.[oppChoiceField];
+  useEffect(() => {
+    if (oppPending === 'HIDDEN') {
+      setOppShaking(true);
+      const t = setTimeout(() => setOppShaking(false), 500);
+      return () => clearTimeout(t);
+    }
+  }, [oppPending]);
 
   if (!room || !tournament || !tournament.rounds) return null;
 
@@ -59,8 +141,14 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId 
     const userLastChoice = isUserBatting ? userMatch.lastBatChoice : userMatch.lastBowlChoice;
     const oppLastChoice = isUserBatting ? userMatch.lastBowlChoice : userMatch.lastBatChoice;
 
-    const leftHandImg = userChoiceSelected ? `/img/${userChoiceSelected}.png` : userLastChoice ? `/img/${userLastChoice}.png` : `/img/closed.png`;
-    const rightHandImg = oppLastChoice ? `/img/${oppLastChoice}.png` : `/img/closed.png`;
+    // Hand shows a closed fist until either you tap a number (your own hand
+    // reveals immediately) or the ball resolves (revealPhase flips both
+    // hands to their final numbers); it snaps back to closed for the next
+    // ball a moment after resolution.
+    const leftHandImg = userChoiceSelected
+      ? `/img/${userChoiceSelected}.png`
+      : (revealPhase === 'revealed' && userLastChoice) ? `/img/${userLastChoice}.png` : `/img/closed.png`;
+    const rightHandImg = (revealPhase === 'revealed' && oppLastChoice) ? `/img/${oppLastChoice}.png` : `/img/closed.png`;
 
     const waitTicks = userMatch.waitTicks || 0;
     const secondsLeft = Math.max(0, Math.ceil((MOVE_AUTO_PICK_TICKS - waitTicks) * 1.2));
@@ -68,12 +156,15 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId 
 
     const handleChoice = (n) => {
       if (userChoiceSelected) return;
+      setMyShaking(true);
+      setTimeout(() => setMyShaking(false), 400);
       setLocalChoice(n);
       onSelectChoice(userMatch.id, userTeamId, n);
     };
 
     return (
       <div className="match-stage">
+        <button className="leave-game-btn match-leave-fab" onClick={onLeave}><LogOut size={15} /> <span>Leave game</span></button>
         <div className="match-topbar">
           <div className="score-card">
             <div className="score-card-header">
@@ -90,22 +181,21 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId 
             <div style={{ fontSize: 11, color: 'var(--text-2)' }}>{userMatch.innings === 1 ? 'First innings' : 'Second innings'}</div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
-            <button className="leave-game-btn" onClick={onLeave}><LogOut size={15} /> Leave game</button>
-            <div className="score-card">
-              <div className="score-card-header">
-                <span style={{ marginRight: 'auto', fontSize: 18 }}>{!isUserBatting ? '🏏' : '🔴'}</span>
-                <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 16, color: '#fff' }}>{oppFranchise.ownerName || 'Bot'}</span>
-                <div className="player-avatar" style={{ width: 42, height: 42, border: '2px solid var(--signal)', background: oppFranchise.color, fontSize: 22 }}>{oppFranchise.logo}</div>
-              </div>
-              <div className="score-value">{oppRuns} / {oppWkts}</div>
+          <div className="score-card">
+            <div className="score-card-header">
+              <span style={{ marginRight: 'auto', fontSize: 18 }}>{!isUserBatting ? '🏏' : '🔴'}</span>
+              <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 16, color: '#fff' }}>{oppFranchise.ownerName || 'Bot'}</span>
+              <div className="player-avatar" style={{ width: 42, height: 42, border: '2px solid var(--signal)', background: oppFranchise.color, fontSize: 22 }}>{oppFranchise.logo}</div>
             </div>
+            <div className="score-value">{oppRuns} / {oppWkts}</div>
           </div>
         </div>
 
-        <img src={leftHandImg} alt="Your hand" className="match-hand left" />
-        <img src={rightHandImg} alt="Opponent hand" className="match-hand right" />
-        <div className="match-vs">VS</div>
+        <div className="match-hand-zone">
+          <img src={leftHandImg} alt="Your hand" className={`match-hand left ${myShaking ? 'shaking' : ''}`} />
+          <img src={rightHandImg} alt="Opponent hand" className={`match-hand right ${oppShaking ? 'shaking' : ''}`} />
+          <div className="match-vs">VS</div>
+        </div>
 
         <div className="match-bottombar">
           <div className="keypad-wrap">
@@ -129,9 +219,41 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId 
 
           <div className="status-pill">{isUserBatting ? 'You are batting!' : 'You are bowling!'}</div>
         </div>
+
+        {userMatch.awaitingBowlerFor === userTeamId && (
+          <BowlerPicker
+            match={userMatch}
+            team={userFranchise}
+            cap={Math.max(1, Math.ceil(room.overs / 5))}
+            onSelect={(playerId) => onSelectBowler(userMatch.id, userTeamId, playerId)}
+          />
+        )}
+        {userMatch.awaitingBatsmanFor === userTeamId && (
+          <BatsmanPicker
+            match={userMatch}
+            team={userFranchise}
+            onSelect={(playerId) => onSelectNextBatsman(userMatch.id, userTeamId, playerId)}
+          />
+        )}
       </div>
     );
   }
+
+  if (userMatch && userMatch.status === 'COMPLETED' && dismissedSummaryId !== userMatch.id) {
+    return (
+      <>
+        <MatchSummary match={userMatch} teams={teams} onClose={() => setDismissedSummaryId(userMatch.id)} />
+        <MatchesGrid room={room} currentRoundObj={currentRoundObj} teams={teams} isPaused={isPaused} userTeamId={userTeamId} />
+      </>
+    );
+  }
+
+  return <MatchesGrid room={room} currentRoundObj={currentRoundObj} teams={teams} isPaused={isPaused} userTeamId={userTeamId} />;
+}
+
+function MatchesGrid({ room, currentRoundObj, teams, isPaused, userTeamId }) {
+  const [openSummaryId, setOpenSummaryId] = useState(null);
+  const summaryMatch = openSummaryId ? currentRoundObj.matches.find(m => m.id === openSummaryId) : null;
 
   return (
     <div className="page-wrap">
@@ -154,10 +276,13 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId 
           const isUserMatch = match.team1Id === userTeamId || match.team2Id === userTeamId;
 
           return (
-            <div key={match.id} className="card match-grid-card" style={{
-              border: isUserMatch ? '2px solid var(--signal-line)' : undefined,
-              boxShadow: match.status === 'LIVE' ? '0 0 20px rgba(56, 189, 248, 0.1)' : undefined,
-            }}>
+            <div key={match.id} className="card match-grid-card"
+              onClick={() => match.status === 'COMPLETED' && setOpenSummaryId(match.id)}
+              style={{
+                border: isUserMatch ? '2px solid var(--signal-line)' : undefined,
+                boxShadow: match.status === 'LIVE' ? '0 0 20px rgba(56, 189, 248, 0.1)' : undefined,
+                cursor: match.status === 'COMPLETED' ? 'pointer' : undefined,
+              }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', letterSpacing: '0.03em' }}>{match.name || 'Group stage'}</span>
                 {match.status === 'LIVE' ? (
@@ -199,12 +324,14 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId 
                     Need {match.target - match.runs2} off {room.overs * 6 - match.balls2}b •
                   </span>
                 )}
-                <span>{match.commentary[0] || 'Awaiting ball…'}</span>
+                <span>{match.status === 'COMPLETED' ? 'Tap for match summary' : (match.commentary[0] || 'Awaiting ball…')}</span>
               </div>
             </div>
           );
         })}
       </div>
+
+      {summaryMatch && <MatchSummary match={summaryMatch} teams={teams} onClose={() => setOpenSummaryId(null)} />}
     </div>
   );
 }

@@ -177,6 +177,22 @@ io.on('connection', (socket) => {
     if (result.ok) broadcastRoom(roomCode);
   });
 
+  socket.on('skipCurrentPlayer', ({ roomCode, hostToken }, callback) => {
+    const room = requireHost(socket, roomCode, hostToken);
+    if (!room) { if (callback) callback({ ok: false, reason: 'NOT_AUTHORIZED' }); return; }
+    const result = room.skipCurrentPlayer();
+    if (callback) callback(result);
+    if (result.ok) broadcastRoom(roomCode);
+  });
+
+  socket.on('setTeamReady', ({ roomCode, teamId }, callback) => {
+    const auth = authTeam(socket, roomCode, teamId);
+    if (!auth) { if (callback) callback({ ok: false, reason: 'NOT_AUTHORIZED' }); return; }
+    const result = auth.room.setTeamReady(teamId);
+    if (callback) callback(result);
+    if (result.ok) broadcastRoom(roomCode);
+  });
+
   socket.on('selectHandChoice', ({ roomCode, matchId, teamId, choice }) => {
     const auth = authTeam(socket, roomCode, teamId);
     if (!auth) return;
@@ -189,6 +205,32 @@ io.on('connection', (socket) => {
     if (teamId === match.team1Id) match.interactiveInput.team1Choice = choice;
     if (teamId === match.team2Id) match.interactiveInput.team2Choice = choice;
     broadcastRoom(roomCode);
+  });
+
+  socket.on('selectBowler', ({ roomCode, matchId, teamId, playerId }, callback) => {
+    const auth = authTeam(socket, roomCode, teamId);
+    if (!auth) { if (callback) callback({ ok: false, reason: 'NOT_AUTHORIZED' }); return; }
+    const { room } = auth;
+    if (room.status !== 'MATCHES') { if (callback) callback({ ok: false, reason: 'NOT_IN_MATCHES' }); return; }
+    const roundObj = room.tournament.rounds[room.tournament.currentRound];
+    const match = roundObj?.matches.find(m => m.id === matchId);
+    if (!match) { if (callback) callback({ ok: false, reason: 'NOT_FOUND' }); return; }
+    const result = room.selectBowler(match, teamId, playerId);
+    if (callback) callback(result);
+    if (result.ok) broadcastRoom(roomCode);
+  });
+
+  socket.on('selectNextBatsman', ({ roomCode, matchId, teamId, playerId }, callback) => {
+    const auth = authTeam(socket, roomCode, teamId);
+    if (!auth) { if (callback) callback({ ok: false, reason: 'NOT_AUTHORIZED' }); return; }
+    const { room } = auth;
+    if (room.status !== 'MATCHES') { if (callback) callback({ ok: false, reason: 'NOT_IN_MATCHES' }); return; }
+    const roundObj = room.tournament.rounds[room.tournament.currentRound];
+    const match = roundObj?.matches.find(m => m.id === matchId);
+    if (!match) { if (callback) callback({ ok: false, reason: 'NOT_FOUND' }); return; }
+    const result = room.selectNextBatsman(match, teamId, playerId);
+    if (callback) callback(result);
+    if (result.ok) broadcastRoom(roomCode);
   });
 
   socket.on('togglePauseRoom', ({ roomCode, hostToken }) => {
@@ -208,10 +250,11 @@ io.on('connection', (socket) => {
         t.squad = [];
         t.purse = room.purseLimit;
         t.strength = { bat: 50, bowl: 50 };
+        t.readyForMatches = false;
       });
       room.auction.phase = 'IDLE';
       room.auction.status = 'IDLE';
-      room.tournament = { currentRound: 0, rounds: [], structure: null, pointsTable: [], winnerTeamId: null };
+      room.tournament = { currentRound: 0, rounds: [], structure: null, pointsTable: [], winnerTeamId: null, playerStats: {} };
       broadcastRoom(roomCode);
     }
   });

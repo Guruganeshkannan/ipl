@@ -100,7 +100,7 @@ export class Room {
     this.minBasePrice = data.minBasePrice || 0.5;
     this.poolSize = data.poolSize || null; // null = auto-scale at auction start
     this.difficulty = data.difficulty || 'normal';
-    this.status = data.status || 'LOBBY'; // LOBBY, AUCTION, MATCHES, FINISHED
+    this.status = data.status || 'LOBBY'; // LOBBY, AUCTION, PRE_MATCH, MATCHES, FINISHED
     this.isPaused = data.isPaused || false;
     this.chat = data.chat || [];
     this.updatedAt = data.updatedAt || Date.now();
@@ -140,10 +140,11 @@ export class Room {
       rounds: [],
       structure: null,
       pointsTable: [],
-      winnerTeamId: null
+      winnerTeamId: null,
+      playerStats: {}
     };
 
-    if (data.status === 'MATCHES' && (!this.tournament.rounds || this.tournament.rounds.length === 0)) {
+    if ((data.status === 'MATCHES' || data.status === 'PRE_MATCH') && (!this.tournament.rounds || this.tournament.rounds.length === 0)) {
       this.generateSchedule();
     }
   }
@@ -211,14 +212,16 @@ export class Room {
         timer: auction.timer,
         timerActive: auction.timerActive,
         remainingCount: auction.remainingCount,
-        upcomingPreview: upcoming
+        upcomingPreview: upcoming,
+        unsoldPreview: auction.unsoldQueue.map(id => this._findPlayer(id)).filter(Boolean)
       },
       tournament: {
         currentRound: this.tournament.currentRound,
         structure: this.tournament.structure,
         pointsTable: this.tournament.pointsTable,
         winnerTeamId: this.tournament.winnerTeamId,
-        rounds: this.tournament.rounds.map(r => this._slimRound(r))
+        rounds: this.tournament.rounds.map(r => this._slimRound(r)),
+        playerStats: Object.values(this.tournament.playerStats || {})
       },
       chat: this.chat.slice(-50)
     };
@@ -349,7 +352,10 @@ export class Room {
   // Auction
   // -------------------------------------------------------------------------
   buildAuctionPool() {
-    let pool = [...rawPlayersData];
+    // Shuffle fresh every time an auction starts so the pool/marquee picks
+    // (and therefore the whole auction order) differ from room to room and
+    // from reset to reset, instead of always being the same rating-sorted list.
+    let pool = shuffleArray(rawPlayersData);
     const targetSize = this.poolSize || Math.round(this.teams.length * this.maxSquadSize * POOL_SIZE_MULTIPLIER);
     if (targetSize < pool.length) {
       const marquee = pool.filter(p => p.rating >= MARQUEE_RATING_FLOOR)
@@ -531,6 +537,47 @@ export class Room {
     return { ok: true, amount };
   }
 
+  // Resolves the player currently up for bidding — sold to the current
+  // bidder if there is one, unsold otherwise — and opens the post-sale hold.
+  // Shared by the timer running out and the admin Skip control, so both
+  // paths stay in sync.
+  _resolveCurrentPlayer() {
+    const a = this.auction;
+    if (a.currentBidder) {
+      const winningTeam = this.teams.find(t => t.id === a.currentBidder);
+      if (winningTeam) {
+        winningTeam.purse = round2(winningTeam.purse - a.currentBid);
+        winningTeam.squad.push({ ...a.currentPlayer, soldPrice: a.currentBid });
+        this._recomputeTeamStrength(winningTeam);
+        a.soldLog.push({ playerId: a.currentPlayer.id, teamId: winningTeam.id, price: a.currentBid });
+      }
+      a.phase = 'SOLD';
+      a.status = 'SOLD';
+    } else {
+      a.phase = 'UNSOLD';
+      a.status = 'UNSOLD';
+      if (a.currentAccelIndex === undefined) {
+        a.unsoldQueue.push(a.currentPlayer.id);
+      }
+    }
+    a.timer = 0;
+    a.timerActive = false;
+    a.holdTicks = SOLD_HOLD_TICKS;
+    this._recomputeRemainingCount();
+  }
+
+  // Admin-only: force the current player to resolve immediately (sold if
+  // someone's bidding, unsold otherwise) instead of waiting out the timer.
+  // Resolves directly rather than delegating to tickAuction(), since running
+  // processAiBids() first could plant a fresh bid that resets the timer and
+  // silently swallow the skip.
+  skipCurrentPlayer() {
+    const a = this.auction;
+    if (a.phase !== 'BIDDING' || !a.currentPlayer) return { ok: false, reason: 'NOT_BIDDING' };
+    this._resolveCurrentPlayer();
+    return { ok: true };
+  }
+
   tickAuction() {
     const a = this.auction;
     if (this.status !== 'AUCTION') return;
@@ -553,27 +600,7 @@ export class Room {
       return;
     }
 
-    // Time's up: resolve sale or unsold.
-    if (a.currentBidder) {
-      const winningTeam = this.teams.find(t => t.id === a.currentBidder);
-      if (winningTeam) {
-        winningTeam.purse = round2(winningTeam.purse - a.currentBid);
-        winningTeam.squad.push({ ...a.currentPlayer, soldPrice: a.currentBid });
-        this._recomputeTeamStrength(winningTeam);
-        a.soldLog.push({ playerId: a.currentPlayer.id, teamId: winningTeam.id, price: a.currentBid });
-      }
-      a.phase = 'SOLD';
-      a.status = 'SOLD';
-    } else {
-      a.phase = 'UNSOLD';
-      a.status = 'UNSOLD';
-      if (a.currentAccelIndex === undefined) {
-        a.unsoldQueue.push(a.currentPlayer.id);
-      }
-    }
-
-    a.timerActive = false;
-    a.holdTicks = SOLD_HOLD_TICKS;
+    this._resolveCurrentPlayer();
   }
 
   // -------------------------------------------------------------------------
@@ -678,8 +705,23 @@ export class Room {
       }
     });
 
-    this.status = 'MATCHES';
+    // Generate the schedule now (so standings/fixtures can be shown), but
+    // hold in PRE_MATCH until every human team confirms they're ready —
+    // gives everyone a look at the bracket/table before the first ball.
+    this.status = 'PRE_MATCH';
+    this.teams.forEach(t => { t.readyForMatches = !!t.isAi; });
     this.generateSchedule();
+  }
+
+  setTeamReady(teamId) {
+    if (this.status !== 'PRE_MATCH') return { ok: false, reason: 'WRONG_STATUS' };
+    const team = this.teams.find(t => t.id === teamId);
+    if (!team) return { ok: false, reason: 'NOT_FOUND' };
+    team.readyForMatches = true;
+    if (this.teams.every(t => t.readyForMatches)) {
+      this.status = 'MATCHES';
+    }
+    return { ok: true };
   }
 
   // -------------------------------------------------------------------------
@@ -722,6 +764,17 @@ export class Room {
 
   createMatchObject(team1Id, team2Id, roundIdx, matchIdx) {
     const maxWickets = Math.max(2, this.maxSquadSize - 1);
+    const t1 = this.teams.find(t => t.id === team1Id);
+    const t2 = this.teams.find(t => t.id === team2Id);
+    const battingOrder = {
+      [team1Id]: (t1?.squad || []).map(p => p.id),
+      [team2Id]: (t2?.squad || []).map(p => p.id)
+    };
+    const playerStats = {};
+    [t1, t2].forEach(t => (t?.squad || []).forEach(p => {
+      playerStats[p.id] = { playerId: p.id, name: p.name, teamId: t.id, runs: 0, ballsFaced: 0, wickets: 0, ballsBowled: 0, runsConceded: 0, out: false };
+    }));
+
     return {
       id: `m_${roundIdx}_${matchIdx}`,
       roundIndex: roundIdx,
@@ -748,8 +801,23 @@ export class Room {
       interactiveInput: {
         team1Choice: null,
         team2Choice: null
-      }
+      },
+      // Per-player attribution (batting order fixed by squad order; wicket
+      // advances to the next batsman. Bowler is chosen fresh each over —
+      // by the controlling human, or auto-picked respecting the rotation
+      // cap for AI teams — so a match can't resolve balls until it's set.)
+      battingOrder,
+      battingIndex: { [team1Id]: 0, [team2Id]: 0 },
+      currentBowlerId: { [team1Id]: null, [team2Id]: null },
+      bowlerOversBowled: { [team1Id]: {}, [team2Id]: {} },
+      lastBowlerId: { [team1Id]: null, [team2Id]: null },
+      playerStats,
+      awaitingBowlerFor: null // teamId currently expected to pick a bowler, or null
     };
+  }
+
+  maxOversPerBowler() {
+    return Math.max(1, Math.ceil(this.overs / 5));
   }
 
   findRound(kind) {
@@ -869,10 +937,95 @@ export class Room {
     return weightedPick(w);
   }
 
+  // Auto-pick a bowler for an AI-controlled team, respecting the per-bowler
+  // overs cap. Picks whichever eligible squad member (excluding whoever
+  // bowled the previous over, if others are available) has bowled the
+  // fewest overs so far, favouring stronger bowlers.
+  autoPickBowler(match, teamId) {
+    const team = this.teams.find(t => t.id === teamId);
+    if (!team) return null;
+    const cap = this.maxOversPerBowler();
+    const bowled = match.bowlerOversBowled[teamId] || {};
+    const last = match.lastBowlerId[teamId];
+    let eligible = team.squad.filter(p => (bowled[p.id] || 0) < cap);
+    if (eligible.length > 1 && last) {
+      const withoutLast = eligible.filter(p => p.id !== last);
+      if (withoutLast.length > 0) eligible = withoutLast;
+    }
+    if (eligible.length === 0) eligible = team.squad; // shouldn't happen if squad size is sane
+    eligible = [...eligible].sort((a, b) => (bowled[a.id] || 0) - (bowled[b.id] || 0) || b.bowlingSkill - a.bowlingSkill);
+    return eligible[0]?.id || null;
+  }
+
+  // Admin/team action: assign the bowler for the upcoming over. Rejects if
+  // that bowler has already bowled the maximum overs allowed.
+  selectBowler(match, teamId, playerId) {
+    if (match.bowlingTeamId !== teamId) return { ok: false, reason: 'NOT_BOWLING_TEAM' };
+    const team = this.teams.find(t => t.id === teamId);
+    const player = team?.squad.find(p => p.id === playerId);
+    if (!player) return { ok: false, reason: 'NOT_IN_SQUAD' };
+    const bowled = match.bowlerOversBowled[teamId]?.[playerId] || 0;
+    if (bowled >= this.maxOversPerBowler()) return { ok: false, reason: 'OVERS_LIMIT' };
+    match.currentBowlerId[teamId] = playerId;
+    match.awaitingBowlerFor = null;
+    return { ok: true };
+  }
+
+  // Admin/team action: pick the next batsman after a wicket (defaults to
+  // strict batting order if the human doesn't choose in time via auto-pick
+  // in processMatchBall).
+  selectNextBatsman(match, teamId, playerId) {
+    if (match.battingTeamId !== teamId) return { ok: false, reason: 'NOT_BATTING_TEAM' };
+    const order = match.battingOrder[teamId] || [];
+    const stats = match.playerStats;
+    if (!order.includes(playerId) || stats[playerId]?.out) return { ok: false, reason: 'INVALID_PLAYER' };
+    const idx = order.indexOf(playerId);
+    match.battingIndex[teamId] = idx;
+    match.awaitingBatsmanFor = null;
+    return { ok: true };
+  }
+
+  currentBatsmanId(match, teamId) {
+    const order = match.battingOrder[teamId] || [];
+    const idx = match.battingIndex[teamId] || 0;
+    return order[idx] || null;
+  }
+
   processMatchBall(match) {
     const batTeam = this.teams.find(t => t.id === match.battingTeamId);
     const bowlTeam = this.teams.find(t => t.id === match.bowlingTeamId);
     if (!batTeam || !bowlTeam) return;
+
+    // A wicket just fell for a human-controlled batting side: wait for them
+    // to pick the next batsman before any further ball resolves. Checked
+    // first and unconditionally returns, so it can never be short-circuited
+    // by the bowler pick or ball-resolution logic below re-using a stale
+    // (already-out) batsman for another ball on the same tick.
+    if (match.awaitingBatsmanFor === match.battingTeamId) {
+      match.waitTicks = (match.waitTicks || 0) + 1;
+      if (match.waitTicks < MOVE_AUTO_PICK_TICKS) return;
+      const order = match.battingOrder[match.battingTeamId] || [];
+      const nextIdx = order.findIndex(id => !match.playerStats[id]?.out);
+      if (nextIdx >= 0) match.battingIndex[match.battingTeamId] = nextIdx;
+      match.awaitingBatsmanFor = null;
+      match.waitTicks = 0;
+      return; // resume ball resolution on the next tick with the new batsman in place
+    }
+
+    // A new over needs a bowler picked before any ball can be bowled.
+    // Human-controlled bowling teams get to choose; AI teams auto-pick
+    // instantly so they never stall the match.
+    if (!match.currentBowlerId[match.bowlingTeamId]) {
+      if (bowlTeam.isAi) {
+        match.currentBowlerId[match.bowlingTeamId] = this.autoPickBowler(match, match.bowlingTeamId);
+      } else {
+        match.awaitingBowlerFor = match.bowlingTeamId;
+        match.waitTicks = (match.waitTicks || 0) + 1;
+        if (match.waitTicks < MOVE_AUTO_PICK_TICKS) return;
+        match.currentBowlerId[match.bowlingTeamId] = this.autoPickBowler(match, match.bowlingTeamId);
+        match.commentary.unshift(`⏱ ${bowlTeam.shortName} auto-selected a bowler — no pick in time.`);
+      }
+    }
 
     let batChoice = match.battingTeamId === match.team1Id ? match.interactiveInput.team1Choice : match.interactiveInput.team2Choice;
     let bowlChoice = match.bowlingTeamId === match.team1Id ? match.interactiveInput.team1Choice : match.interactiveInput.team2Choice;
@@ -913,6 +1066,11 @@ export class Room {
     const bowlTier = clamp((bowlTeam.strength.bowl - 50) / 50, 0, 1);
     const maxBallsPerInnings = this.overs * 6;
 
+    const batsmanId = this.currentBatsmanId(match, match.battingTeamId);
+    const bowlerId = match.currentBowlerId[match.bowlingTeamId];
+    const batsmanStat = match.playerStats[batsmanId];
+    const bowlerStat = match.playerStats[bowlerId];
+
     const resolveBall = (runsField, wktsField, ballsField, oversField, inningsNum) => {
       match[ballsField] += 1;
       const overNum = Math.floor(match[ballsField] / 6);
@@ -939,13 +1097,44 @@ export class Room {
         note = `Edged past for extra — top-order class.`;
       }
 
+      if (batsmanStat) batsmanStat.ballsFaced += 1;
+      if (bowlerStat) bowlerStat.ballsBowled += 1;
+
       if (isWicket) {
         match[wktsField] += 1;
-        match.commentary.unshift(`[Innings ${inningsNum} - ${match[oversField].toFixed(1)} ov] WICKET! ${batTeam.shortName} batsman out! Choice: ${batChoice} vs ${bowlChoice}`);
+        if (batsmanStat) { batsmanStat.out = true; }
+        if (bowlerStat) bowlerStat.wickets += 1;
+        const batsmanName = batsmanStat?.name || batTeam.shortName;
+        match.commentary.unshift(`[Innings ${inningsNum} - ${match[oversField].toFixed(1)} ov] WICKET! ${batsmanName} out! Choice: ${batChoice} vs ${bowlChoice}`);
+        // Advance to the next batsman in order; a human team gets a chance
+        // to pick manually before the next ball via awaitingBatsmanFor.
+        const order = match.battingOrder[match.battingTeamId] || [];
+        const nextIdx = (match.battingIndex[match.battingTeamId] || 0) + 1;
+        if (nextIdx < order.length) {
+          if (!batTeam.isAi) {
+            match.awaitingBatsmanFor = match.battingTeamId;
+          } else {
+            match.battingIndex[match.battingTeamId] = nextIdx;
+          }
+        }
       } else {
         match[runsField] += runsScored;
+        if (batsmanStat) batsmanStat.runs += runsScored;
+        if (bowlerStat) bowlerStat.runsConceded += runsScored;
         const suffix = note ? ` ${note}` : '';
         match.commentary.unshift(`[Innings ${inningsNum} - ${match[oversField].toFixed(1)} ov] ${runsScored} run(s). Choice: ${batChoice} (bat) vs ${bowlChoice} (bowl).${suffix}`);
+      }
+
+      // Over boundary: credit the over to the bowler and clear the slot so
+      // the next over forces a fresh pick (AI or human).
+      if (match[ballsField] % 6 === 0) {
+        const bowlingTeamId = match.bowlingTeamId;
+        const bId = match.currentBowlerId[bowlingTeamId];
+        if (bId) {
+          match.bowlerOversBowled[bowlingTeamId][bId] = (match.bowlerOversBowled[bowlingTeamId][bId] || 0) + 1;
+          match.lastBowlerId[bowlingTeamId] = bId;
+        }
+        match.currentBowlerId[bowlingTeamId] = null;
       }
     };
 
@@ -958,6 +1147,7 @@ export class Room {
         const temp = match.battingTeamId;
         match.battingTeamId = match.bowlingTeamId;
         match.bowlingTeamId = temp;
+        match.currentBowlerId[match.bowlingTeamId] = null;
         match.commentary.unshift(`Innings 1 completed! ${batTeam.shortName} scored ${match.runs1}/${match.wickets1}. Target for ${bowlTeam.shortName} is ${match.target} runs.`);
       }
     } else if (match.innings === 2) {
@@ -979,7 +1169,27 @@ export class Room {
       }
     }
 
+    if (match.status === 'COMPLETED') {
+      this._applyMatchStatsToTournament(match);
+    }
+
     if (match.commentary.length > 40) match.commentary.length = 40;
+  }
+
+  // Roll a completed match's per-player stats into the room-wide tournament
+  // leaderboard (orange cap / purple cap), keyed by player id.
+  _applyMatchStatsToTournament(match) {
+    if (!this.tournament.playerStats) this.tournament.playerStats = {};
+    const agg = this.tournament.playerStats;
+    Object.values(match.playerStats).forEach(s => {
+      if (!agg[s.playerId]) {
+        agg[s.playerId] = { playerId: s.playerId, name: s.name, teamId: s.teamId, runs: 0, wickets: 0, matches: 0 };
+      }
+      agg[s.playerId].runs += s.runs;
+      agg[s.playerId].wickets += s.wickets;
+      agg[s.playerId].matches += 1;
+      agg[s.playerId].teamId = s.teamId; // keep current team (in case of future trades — not applicable now, but future-proof)
+    });
   }
 
   // -------------------------------------------------------------------------
