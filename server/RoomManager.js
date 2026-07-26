@@ -577,6 +577,7 @@ export class Room {
   skipCurrentPlayer() {
     const a = this.auction;
     if (a.phase !== 'BIDDING' || !a.currentPlayer) return { ok: false, reason: 'NOT_BIDDING' };
+    if (a.currentBidder) return { ok: false, reason: 'BID_PLACED' };
     this._resolveCurrentPlayer();
     return { ok: true };
   }
