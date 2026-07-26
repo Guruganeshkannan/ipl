@@ -138,10 +138,10 @@ export default function LobbyView({ room, catalog, isHost, hostTeamId, playerNam
             {room.teams.length} franchises in this room · empty slots are filled by AI when the auction starts
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             className="input-field"
-            style={{ width: 160 }}
+            style={{ width: 160, maxWidth: '100%', flex: '1 1 140px' }}
             placeholder="Your name"
             value={nameInput}
             maxLength={24}

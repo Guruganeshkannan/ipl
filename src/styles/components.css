@@ -365,6 +365,17 @@
   .navbar-tab span.tab-label { display: none; }
   .navbar-team-badge span.team-label { display: none; }
 }
+@media (max-width: 480px) {
+  .navbar-inner { padding: 0 10px; gap: 8px; }
+  .navbar-right { gap: 5px; }
+  .navbar-tabs { gap: 0; padding: 3px; }
+  .navbar-tab { padding: 7px 9px; }
+  .navbar-room-code { padding: 6px 8px; }
+  .navbar-room-code svg { display: none; }
+  .navbar-team-badge { padding: 6px 8px; }
+  .navbar-icon-btn { width: 30px; height: 30px; }
+  .badge.badge-signal { padding: 4px 7px; font-size: 10px; }
+}
 
 /* =====================================================================
    Lobby
@@ -848,6 +859,11 @@
   transition: all 0.12s;
   display: flex; align-items: center; justify-content: center;
   padding: 4px;
+  flex-shrink: 0;
+}
+@media (max-width: 420px) {
+  .keypad-grid { gap: 6px; }
+  .keypad-btn-img { width: 52px; height: 52px; }
 }
 .keypad-btn-img.active {
   background: var(--signal);

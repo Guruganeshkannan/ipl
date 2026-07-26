@@ -15,10 +15,14 @@ export default function AuctionView({ room, playersById, onPlaceBid, onSendChat,
   const auction = room?.auction;
   const teams = room?.teams || [];
   const chat = room?.chat || [];
+  const chatLength = chat.length;
+  const lastChatId = chat[chat.length - 1]?.id;
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chat]);
+    if (chatLength === 0) return;
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastChatId]);
 
   // Single shared AudioContext, reused across ticks instead of leaked one-per-second.
   useEffect(() => {
