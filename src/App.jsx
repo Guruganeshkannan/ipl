@@ -11,7 +11,10 @@ import TrophyView from './components/TrophyView';
 // Vercel only serves the static frontend, which cannot run the Socket.IO/game-loop
 // server. VITE_SERVER_URL points at that backend; unset in local dev, where the
 // same-origin default is correct (server/index.js serves the built frontend too).
-const socket = io(import.meta.env.VITE_SERVER_URL || undefined);
+// transports: ['websocket'] must match the server config — some hosts
+// (Render's free tier included) don't guarantee sticky sessions across the
+// default HTTP long-polling handshake, which manifests as repeated 400s.
+const socket = io(import.meta.env.VITE_SERVER_URL || undefined, { transports: ['websocket'] });
 
 function removeTeamErrorMessage(reason) {
   switch (reason) {

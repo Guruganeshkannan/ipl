@@ -21,7 +21,12 @@ app.use(express.static(distPath));
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
+  cors: { origin: '*', methods: ['GET', 'POST'] },
+  // Render's free tier doesn't guarantee sticky sessions across polling
+  // requests, so the default polling-then-upgrade handshake alternates
+  // between server processes and 400s. WebSocket is one persistent
+  // connection, so it sidesteps that entirely.
+  transports: ['websocket']
 });
 
 const storedRooms = loadRooms();
