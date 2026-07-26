@@ -19,6 +19,8 @@ const ACCEL_TIMER_START = 5;        // shorter clock in the accelerated round
 const BASE_TIMER_START = 8;
 const BID_RESET_TIMER = 6;
 const MOVE_AUTO_PICK_TICKS = 15;    // ~18s of no input before auto-play
+const TOSS_WAIT_TICKS = 10;         // ~12s for the toss-winning human to choose bat/bowl
+const TOSS_RESULT_HOLD_TICKS = 3;   // ~3.6s showing who's batting/bowling before the first ball
 const MARQUEE_RATING_FLOOR = 95;
 const MARQUEE_MAX = 8;
 const POOL_SIZE_MULTIPLIER = 1.6;   // pool ~= teams * squadSize * multiplier when auto-scaled
@@ -795,6 +797,11 @@ export class Room {
       maxWickets,
       status: 'SCHEDULED',
       winnerId: null,
+      tossWinnerId: null,
+      tossChoice: null, // 'bat' | 'bowl'
+      tossWaitTicks: 0,
+      lastBallEvent: null, // 'SIX' | 'FOUR' | 'WICKET' | null — for client-side celebration animations
+      lastBallSeq: 0,      // increments every resolved ball, so repeats of the same event still trigger a fresh celebration
       commentary: [`Match scheduled between ${team1Id} and ${team2Id}`],
       recentChoices: { [team1Id]: [], [team2Id]: [] },
       waitTicks: 0,
@@ -904,8 +911,19 @@ export class Room {
       allRoundMatchesDone = false;
 
       if (match.status === 'SCHEDULED') {
-        match.status = 'LIVE';
-        match.commentary.unshift(`Match started! ${match.battingTeamId} is batting first.`);
+        this.startToss(match);
+      }
+
+      if (match.status === 'TOSS') {
+        this.tickToss(match);
+      }
+
+      if (match.status === 'TOSS_RESULT') {
+        match.tossWaitTicks = (match.tossWaitTicks || 0) + 1;
+        if (match.tossWaitTicks >= TOSS_RESULT_HOLD_TICKS) {
+          match.status = 'LIVE';
+          match.commentary.unshift(`Match started! ${match.battingTeamId} is batting first.`);
+        }
       }
 
       if (match.status === 'LIVE') {
@@ -935,6 +953,56 @@ export class Room {
     const w = [1, 1, 1, 1, 1, 1];
     (opponentRecent || []).slice(-6).forEach(c => { w[c - 1] += 0.9 * t; });
     return weightedPick(w);
+  }
+
+  // Coin toss: pick a random winner, then either auto-decide (AI) or wait
+  // for the winning human to choose bat/bowl. A simple heuristic favours
+  // bowling first when the side's bowling is relatively stronger than its
+  // batting, and vice versa — not a hard rule, just enough to feel sensible.
+  startToss(match) {
+    const t1 = this.teams.find(t => t.id === match.team1Id);
+    const t2 = this.teams.find(t => t.id === match.team2Id);
+    match.tossWinnerId = Math.random() < 0.5 ? match.team1Id : match.team2Id;
+    match.status = 'TOSS';
+    match.tossWaitTicks = 0;
+    match.commentary.unshift(`🪙 Toss: ${match.tossWinnerId} won the toss.`);
+
+    const winnerTeam = match.tossWinnerId === match.team1Id ? t1 : t2;
+    if (winnerTeam.isAi) {
+      const choice = winnerTeam.strength.bowl > winnerTeam.strength.bat ? 'bowl' : 'bat';
+      this._applyTossChoice(match, choice);
+    }
+  }
+
+  tickToss(match) {
+    if (match.tossChoice) return; // already resolved this tick by an AI pick or a human action
+    match.tossWaitTicks = (match.tossWaitTicks || 0) + 1;
+    if (match.tossWaitTicks < TOSS_WAIT_TICKS) return;
+    const winnerTeam = this.teams.find(t => t.id === match.tossWinnerId);
+    const choice = winnerTeam.strength.bowl > winnerTeam.strength.bat ? 'bowl' : 'bat';
+    match.commentary.unshift(`⏱ ${winnerTeam.shortName} auto-chose to ${choice} — no pick in time.`);
+    this._applyTossChoice(match, choice);
+  }
+
+  _applyTossChoice(match, choice) {
+    match.tossChoice = choice;
+    const winnerId = match.tossWinnerId;
+    const loserId = winnerId === match.team1Id ? match.team2Id : match.team1Id;
+    match.battingTeamId = choice === 'bat' ? winnerId : loserId;
+    match.bowlingTeamId = choice === 'bat' ? loserId : winnerId;
+    const winnerTeam = this.teams.find(t => t.id === winnerId);
+    match.commentary.unshift(`${winnerTeam.shortName} chose to ${choice.toUpperCase()} first.`);
+    match.status = 'TOSS_RESULT';
+    match.tossWaitTicks = 0;
+  }
+
+  // Human action: the toss-winning team chooses to bat or bowl first.
+  selectTossChoice(match, teamId, choice) {
+    if (match.status !== 'TOSS') return { ok: false, reason: 'NOT_TOSS_PHASE' };
+    if (match.tossWinnerId !== teamId) return { ok: false, reason: 'NOT_TOSS_WINNER' };
+    if (choice !== 'bat' && choice !== 'bowl') return { ok: false, reason: 'INVALID_CHOICE' };
+    this._applyTossChoice(match, choice);
+    return { ok: true };
   }
 
   // Auto-pick a bowler for an AI-controlled team, respecting the per-bowler
@@ -1106,6 +1174,8 @@ export class Room {
         if (bowlerStat) bowlerStat.wickets += 1;
         const batsmanName = batsmanStat?.name || batTeam.shortName;
         match.commentary.unshift(`[Innings ${inningsNum} - ${match[oversField].toFixed(1)} ov] WICKET! ${batsmanName} out! Choice: ${batChoice} vs ${bowlChoice}`);
+        match.lastBallEvent = 'WICKET';
+        match.lastBallSeq = (match.lastBallSeq || 0) + 1;
         // Advance to the next batsman in order; a human team gets a chance
         // to pick manually before the next ball via awaitingBatsmanFor.
         const order = match.battingOrder[match.battingTeamId] || [];
@@ -1123,6 +1193,8 @@ export class Room {
         if (bowlerStat) bowlerStat.runsConceded += runsScored;
         const suffix = note ? ` ${note}` : '';
         match.commentary.unshift(`[Innings ${inningsNum} - ${match[oversField].toFixed(1)} ov] ${runsScored} run(s). Choice: ${batChoice} (bat) vs ${bowlChoice} (bowl).${suffix}`);
+        match.lastBallEvent = runsScored === 6 ? 'SIX' : runsScored === 4 ? 'FOUR' : null;
+        match.lastBallSeq = (match.lastBallSeq || 0) + 1;
       }
 
       // Over boundary: credit the over to the bowler and clear the slot so

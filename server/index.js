@@ -207,6 +207,19 @@ io.on('connection', (socket) => {
     broadcastRoom(roomCode);
   });
 
+  socket.on('selectTossChoice', ({ roomCode, matchId, teamId, choice }, callback) => {
+    const auth = authTeam(socket, roomCode, teamId);
+    if (!auth) { if (callback) callback({ ok: false, reason: 'NOT_AUTHORIZED' }); return; }
+    const { room } = auth;
+    if (room.status !== 'MATCHES') { if (callback) callback({ ok: false, reason: 'NOT_IN_MATCHES' }); return; }
+    const roundObj = room.tournament.rounds[room.tournament.currentRound];
+    const match = roundObj?.matches.find(m => m.id === matchId);
+    if (!match) { if (callback) callback({ ok: false, reason: 'NOT_FOUND' }); return; }
+    const result = room.selectTossChoice(match, teamId, choice);
+    if (callback) callback(result);
+    if (result.ok) broadcastRoom(roomCode);
+  });
+
   socket.on('selectBowler', ({ roomCode, matchId, teamId, playerId }, callback) => {
     const auth = authTeam(socket, roomCode, teamId);
     if (!auth) { if (callback) callback({ ok: false, reason: 'NOT_AUTHORIZED' }); return; }

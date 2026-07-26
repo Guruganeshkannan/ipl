@@ -61,7 +61,86 @@ function BatsmanPicker({ match, team, onSelect }) {
   );
 }
 
-export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId, onSelectBowler, onSelectNextBatsman }) {
+const CELEBRATION_CONFIG = {
+  SIX: { label: '6', text: 'SIX!', emoji: '🚀', className: 'celebrate-six' },
+  FOUR: { label: '4', text: 'FOUR!', emoji: '🔥', className: 'celebrate-four' },
+  WICKET: { label: 'OUT', text: 'WICKET!', emoji: '🎯', className: 'celebrate-wicket' },
+};
+
+function Celebration({ type }) {
+  const cfg = CELEBRATION_CONFIG[type];
+  if (!cfg) return null;
+  return (
+    <div className={`celebration-overlay ${cfg.className}`}>
+      <div className="celebration-burst">
+        {Array.from({ length: 10 }).map((_, i) => (
+          <span key={i} className="celebration-particle" style={{ '--i': i }}>{cfg.emoji}</span>
+        ))}
+      </div>
+      <div className="celebration-text">{cfg.text}</div>
+    </div>
+  );
+}
+
+function TossScreen({ match, teams, userTeamId, onLeave, onSelectTossChoice }) {
+  const tossWinner = teams.find(t => t.id === match.tossWinnerId);
+  const battingTeam = teams.find(t => t.id === match.battingTeamId);
+  const bowlingTeam = teams.find(t => t.id === match.bowlingTeamId);
+  const isUserTossWinner = match.tossWinnerId === userTeamId;
+  const awaitingChoice = match.status === 'TOSS' && !match.tossChoice;
+
+  return (
+    <div className="match-stage toss-stage">
+      <button className="leave-game-btn match-leave-fab" onClick={onLeave}><LogOut size={15} /> <span>Leave game</span></button>
+      <div className="toss-center">
+        <span className="eyebrow">🪙 THE TOSS</span>
+        {tossWinner ? (
+          <>
+            <h2 className="toss-heading">
+              <span style={{ color: tossWinner.color }}>{tossWinner.logo} {tossWinner.name}</span> won the toss
+            </h2>
+            {awaitingChoice ? (
+              isUserTossWinner ? (
+                <>
+                  <p className="toss-sub">What will you do?</p>
+                  <div className="toss-choice-row">
+                    <button className="btn btn-signal btn-lg" onClick={() => onSelectTossChoice(match.id, userTeamId, 'bat')}>🏏 Bat first</button>
+                    <button className="btn btn-signal btn-lg" onClick={() => onSelectTossChoice(match.id, userTeamId, 'bowl')}>🎯 Bowl first</button>
+                  </div>
+                </>
+              ) : (
+                <p className="toss-sub">Waiting for {tossWinner.ownerName || `${tossWinner.shortName} AI`} to decide…</p>
+              )
+            ) : (
+              <>
+                <p className="toss-sub">
+                  {tossWinner.shortName} chose to {match.tossChoice === 'bat' ? 'BAT' : 'BOWL'} first
+                </p>
+                <div className="toss-lineup">
+                  <div className="toss-lineup-team">
+                    <div className="badge badge-signal" style={{ marginBottom: 6 }}>BATTING</div>
+                    <div style={{ fontSize: 30 }}>{battingTeam?.logo}</div>
+                    <div className="toss-team-name" style={{ color: battingTeam?.color }}>{battingTeam?.name}</div>
+                  </div>
+                  <div className="toss-lineup-vs">VS</div>
+                  <div className="toss-lineup-team">
+                    <div className="badge badge-info" style={{ marginBottom: 6 }}>BOWLING</div>
+                    <div style={{ fontSize: 30 }}>{bowlingTeam?.logo}</div>
+                    <div className="toss-team-name" style={{ color: bowlingTeam?.color }}>{bowlingTeam?.name}</div>
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          <p className="toss-sub">Flipping the coin…</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId, onSelectBowler, onSelectNextBatsman, onSelectTossChoice }) {
   const [localChoice, setLocalChoice] = useState(null);
   const [dismissedSummaryId, setDismissedSummaryId] = useState(null);
   // 'closed' between balls, 'revealed' once the ball has resolved and the
@@ -69,6 +148,7 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId,
   const [revealPhase, setRevealPhase] = useState('closed');
   const [oppShaking, setOppShaking] = useState(false);
   const [myShaking, setMyShaking] = useState(false);
+  const [celebration, setCelebration] = useState(null); // 'SIX' | 'FOUR' | 'WICKET' | null
 
   const tournament = room?.tournament;
   const teams = room?.teams;
@@ -103,6 +183,17 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId,
     }
   }, [oppPending]);
 
+  // Fire the six/four/wicket celebration a beat after the hands reveal,
+  // so it reads as "ball resolved, THEN celebrate" rather than everything
+  // popping at once.
+  useEffect(() => {
+    if (!userMatch?.lastBallEvent) return;
+    const showTimer = setTimeout(() => setCelebration(userMatch.lastBallEvent), 350);
+    const hideTimer = setTimeout(() => setCelebration(null), 350 + 1400);
+    return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userMatch?.lastBallSeq]);
+
   if (!room || !tournament || !tournament.rounds) return null;
 
   if (!currentRoundObj) {
@@ -116,6 +207,10 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId,
         </div>
       </div>
     );
+  }
+
+  if (userMatch && (userMatch.status === 'TOSS' || userMatch.status === 'TOSS_RESULT')) {
+    return <TossScreen match={userMatch} teams={teams} userTeamId={userTeamId} onLeave={onLeave} onSelectTossChoice={onSelectTossChoice} />;
   }
 
   const isUserBatting = userMatch && userMatch.battingTeamId === userTeamId;
@@ -164,6 +259,7 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId,
 
     return (
       <div className="match-stage">
+        {celebration && <Celebration type={celebration} />}
         <button className="leave-game-btn match-leave-fab" onClick={onLeave}><LogOut size={15} /> <span>Leave game</span></button>
         <div className="match-topbar">
           <div className="score-card">
@@ -289,6 +385,8 @@ function MatchesGrid({ room, currentRoundObj, teams, isPaused, userTeamId }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><div className="live-dot" /><span style={{ fontSize: 11, fontWeight: 700, color: 'var(--live-red)' }}>LIVE</span></div>
                 ) : match.status === 'COMPLETED' ? (
                   <span className="badge badge-win" style={{ fontSize: 10 }}>FINISHED</span>
+                ) : match.status === 'TOSS' || match.status === 'TOSS_RESULT' ? (
+                  <span className="badge badge-signal" style={{ fontSize: 10 }}>🪙 TOSS</span>
                 ) : (
                   <span className="badge badge-muted" style={{ fontSize: 10 }}>SCHEDULED</span>
                 )}

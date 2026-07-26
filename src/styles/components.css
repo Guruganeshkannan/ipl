@@ -1004,6 +1004,125 @@
 }
 
 /* =====================================================================
+   Ball celebrations — six / four / wicket
+   ===================================================================== */
+.celebration-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  overflow: hidden;
+}
+.celebration-text {
+  font-family: var(--font-display);
+  font-size: clamp(48px, 14vw, 140px);
+  letter-spacing: 0.04em;
+  animation: celebrationTextIn 1.4s var(--ease-spring) forwards;
+  text-shadow: 0 0 40px currentColor;
+}
+@keyframes celebrationTextIn {
+  0% { transform: scale(0.3) rotate(-8deg); opacity: 0; }
+  15% { transform: scale(1.15) rotate(2deg); opacity: 1; }
+  25% { transform: scale(1) rotate(0deg); opacity: 1; }
+  80% { transform: scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: scale(1.05) rotate(0deg); opacity: 0; }
+}
+.celebrate-six .celebration-text { color: var(--signal); }
+.celebrate-four .celebration-text { color: var(--info-cyan); }
+.celebrate-wicket .celebration-text { color: var(--live-red); }
+
+.celebration-burst {
+  position: absolute;
+  inset: 0;
+}
+.celebration-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: 26px;
+  opacity: 0;
+  animation: celebrationParticle 1.2s ease-out forwards;
+  animation-delay: calc(var(--i) * 0.03s);
+  --angle: calc(var(--i) * 36deg);
+}
+@keyframes celebrationParticle {
+  0% { transform: translate(-50%, -50%) rotate(var(--angle)) translateX(0) scale(0.5); opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--angle)) translateX(220px) scale(1.1); opacity: 0; }
+}
+@media (max-width: 640px) {
+  .celebration-particle { animation-name: celebrationParticleSm; }
+  @keyframes celebrationParticleSm {
+    0% { transform: translate(-50%, -50%) rotate(var(--angle)) translateX(0) scale(0.5); opacity: 1; }
+    100% { transform: translate(-50%, -50%) rotate(var(--angle)) translateX(120px) scale(1); opacity: 0; }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .celebration-text { animation: none; opacity: 1; }
+  .celebration-particle { display: none; }
+}
+
+/* =====================================================================
+   Toss screen
+   ===================================================================== */
+.toss-stage {
+  align-items: center;
+  justify-content: center;
+}
+.toss-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  background: rgba(13, 15, 18, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-xl);
+  padding: 40px 36px;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  animation: tossPop 0.4s var(--ease-spring);
+}
+@keyframes tossPop {
+  0% { transform: scale(0.85); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.toss-heading {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--text-0);
+}
+.toss-sub {
+  color: var(--text-2);
+  font-size: 14px;
+}
+.toss-choice-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+.toss-lineup {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 10px;
+}
+.toss-lineup-team { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.toss-team-name { font-family: var(--font-heading); font-weight: 700; font-size: 15px; }
+.toss-lineup-vs { font-family: var(--font-display); font-size: 20px; color: var(--signal); }
+@media (max-width: 480px) {
+  .toss-center { padding: 28px 20px; }
+  .toss-lineup { gap: 14px; }
+}
+
+/* =====================================================================
    Trophy screen — orange/purple cap leaderboard
    ===================================================================== */
 .cap-leaderboard {

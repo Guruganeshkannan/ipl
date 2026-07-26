@@ -164,6 +164,10 @@ export default function App() {
     if (room) socket.emit('selectHandChoice', { roomCode: room.code, matchId, teamId, choice });
   };
 
+  const handleSelectTossChoice = (matchId, teamId, choice) => {
+    if (room) socket.emit('selectTossChoice', { roomCode: room.code, matchId, teamId, choice });
+  };
+
   const handleSelectBowler = (matchId, teamId, playerId) => {
     if (room) socket.emit('selectBowler', { roomCode: room.code, matchId, teamId, playerId });
   };
@@ -270,7 +274,7 @@ export default function App() {
           <PreMatchView room={room} userTeamId={userTeamId} onReady={handleSetTeamReady} />
         )}
         {room && activeTab === 'MATCHES' && room.status !== 'PRE_MATCH' && (
-          <MatchesView room={room} onSelectChoice={handleSelectChoice} onLeave={handleLeave} userTeamId={userTeamId} onSelectBowler={handleSelectBowler} onSelectNextBatsman={handleSelectNextBatsman} />
+          <MatchesView room={room} onSelectChoice={handleSelectChoice} onLeave={handleLeave} userTeamId={userTeamId} onSelectBowler={handleSelectBowler} onSelectNextBatsman={handleSelectNextBatsman} onSelectTossChoice={handleSelectTossChoice} />
         )}
         {room && activeTab === 'STANDINGS' && (
           <StandingsView room={room} userTeamId={userTeamId} />
