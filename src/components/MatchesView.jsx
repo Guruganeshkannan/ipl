@@ -6,13 +6,18 @@ import PlayerAvatar from './primitives/PlayerAvatar';
 const MOVE_AUTO_PICK_TICKS = 15;
 const ROLE_EMOJI = { Bowler: '🎳', 'Wicket-Keeper': '🧤', 'All-Rounder': '⚡', Batsman: '🏏' };
 
+const BOWLER_PICK_WAIT_TICKS = 6;
+
 function BowlerPicker({ match, team, cap, onSelect }) {
   const bowled = match.bowlerOversBowled[team.id] || {};
+  const secondsLeft = Math.max(0, Math.ceil((BOWLER_PICK_WAIT_TICKS - (match.bowlerWaitTicks || 0)) * 1.2));
   return (
     <div className="picker-overlay">
       <div className="picker-card">
         <span className="eyebrow">SELECT YOUR BOWLER</span>
-        <h3 style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 18, color: 'var(--text-0)', marginTop: 6 }}>Who bowls this over?</h3>
+        <h3 style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 18, color: 'var(--text-0)', marginTop: 6 }}>
+          Who bowls this over? <span style={{ color: 'var(--signal)', fontFamily: 'var(--font-mono)' }}>({secondsLeft}s)</span>
+        </h3>
         <div className="picker-list">
           {team.squad.map(p => {
             const overs = bowled[p.id] || 0;
@@ -249,8 +254,13 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId,
     const secondsLeft = Math.max(0, Math.ceil((MOVE_AUTO_PICK_TICKS - waitTicks) * 1.2));
     const trackPct = Math.min(100, (waitTicks / MOVE_AUTO_PICK_TICKS) * 100);
 
+    // While either side is waiting on a bowler/batsman pick, ball resolution
+    // is paused server-side — disable the keypad too so taps don't pile up
+    // silently and make the wait look like an unresponsive freeze.
+    const blockedByPick = !!userMatch.awaitingBowlerFor || !!userMatch.awaitingBatsmanFor;
+
     const handleChoice = (n) => {
-      if (userChoiceSelected) return;
+      if (userChoiceSelected || blockedByPick) return;
       setMyShaking(true);
       setTimeout(() => setMyShaking(false), 400);
       setLocalChoice(n);
@@ -304,7 +314,7 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId,
                   <button key={n}
                     className={`keypad-btn-img ${active ? 'active' : ''}`}
                     onClick={() => handleChoice(n)}
-                    disabled={isPaused || !!userChoiceSelected}
+                    disabled={isPaused || !!userChoiceSelected || blockedByPick}
                   >
                     <img src={`/img/${n}.png`} alt={`Choice ${n}`} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   </button>
@@ -313,7 +323,13 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId,
             </div>
           </div>
 
-          <div className="status-pill">{isUserBatting ? 'You are batting!' : 'You are bowling!'}</div>
+          <div className="status-pill">
+            {userMatch.awaitingBowlerFor && userMatch.awaitingBowlerFor !== userTeamId
+              ? `⏳ Waiting for ${oppFranchise.shortName} to pick a bowler…`
+              : userMatch.awaitingBatsmanFor && userMatch.awaitingBatsmanFor !== userTeamId
+              ? `⏳ Waiting for ${oppFranchise.shortName} to send in the next batsman…`
+              : isUserBatting ? 'You are batting!' : 'You are bowling!'}
+          </div>
         </div>
 
         {userMatch.awaitingBowlerFor === userTeamId && (

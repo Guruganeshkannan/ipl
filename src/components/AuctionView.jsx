@@ -79,10 +79,19 @@ export default function AuctionView({ room, playersById, onPlaceBid, onSendChat,
   const isSetIntro = phase === 'SET_INTRO';
   const currentBidderTeam = teams.find(t => t.id === auction.currentBidder);
   const userTeam = teams.find(t => t.id === userTeamId);
-  const canBid = isBidding && userTeam && userTeam.id !== auction.currentBidder && userTeam.squad.length < room.maxSquadSize;
+  const squadIsFull = userTeam && userTeam.squad.length >= room.maxSquadSize;
+  const canBid = isBidding && userTeam && userTeam.id !== auction.currentBidder && !squadIsFull;
 
   const handleBid = () => {
     if (!userTeam) return;
+    // A full squad is worth an active warning rather than a silently
+    // disabled button — the player just tried to buy a player they have no
+    // room for, so tell them why instead of doing nothing.
+    if (squadIsFull) {
+      setBidError('SQUAD_FULL');
+      setTimeout(() => setBidError(null), 2500);
+      return;
+    }
     onPlaceBid(userTeam.id, (result) => {
       if (result && !result.ok) {
         setBidError(result.reason);
@@ -259,11 +268,18 @@ export default function AuctionView({ room, playersById, onPlaceBid, onSendChat,
                     <div style={{ width: 1, height: 32, background: 'var(--line-2)' }} />
                   </>
                 )}
-                <button className="btn btn-signal btn-lg" onClick={handleBid} disabled={!canBid}>
+                <button
+                  className="btn btn-signal btn-lg"
+                  onClick={handleBid}
+                  disabled={!isBidding || !userTeam || userTeam.id === auction.currentBidder}
+                >
                   <Gavel size={17} /> Bid ₹{auction.nextBid?.toFixed(2)} CR
                 </button>
               </div>
-              {bidError && <div style={{ color: 'var(--live-red)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>{bidErrorMessage(bidError)}</div>}
+              {squadIsFull && !bidError && (
+                <div style={{ color: 'var(--text-3)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>Your squad is full ({room.maxSquadSize}/{room.maxSquadSize}) — you can't buy more players.</div>
+              )}
+              {bidError && <div style={{ color: 'var(--live-red)', fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>⚠ {bidErrorMessage(bidError)}</div>}
             </>
           )}
         </div>

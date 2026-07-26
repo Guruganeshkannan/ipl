@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Trophy, Gavel, PlayCircle, PauseCircle, BarChart3, Users, RefreshCw, Copy, Check, LogOut } from 'lucide-react';
+import ShareRoomButton from './ShareRoomButton';
 
 export default function Navbar({ activeTab, setActiveTab, room, isHost, onTogglePause, onResetRoom, onLeave, userTeam }) {
   const [copied, setCopied] = useState(false);
@@ -58,6 +59,7 @@ export default function Navbar({ activeTab, setActiveTab, room, isHost, onToggle
             <span className="navbar-code-value">{room.code}</span>
             {copied ? <Check size={13} color="var(--win-green)" /> : <Copy size={13} color="var(--text-3)" />}
           </button>
+          <ShareRoomButton roomCode={room.code} className="navbar-share-btn" />
 
           {userTeam && (
             <div className="navbar-team-badge" style={{ background: userTeam.color }}>

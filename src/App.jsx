@@ -35,6 +35,10 @@ export default function App() {
   const [isHost, setIsHost] = useState(false);
   const [playerName, setPlayerName] = useState(localStorage.getItem('ipl_player_name') || '');
   const [joinError, setJoinError] = useState(null);
+  // A shared invite link looks like /?room=ABC123 — prefills the join box
+  // in the lobby so tapping a WhatsApp link drops straight into "enter your
+  // name and join" instead of asking people to retype the code.
+  const [sharedRoomCode] = useState(() => new URLSearchParams(window.location.search).get('room'));
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
 
@@ -79,6 +83,12 @@ export default function App() {
           clearLocalRoom();
         }
       });
+    }
+
+    if (sharedRoomCode) {
+      // Strip the query param so refreshing/copying the URL later doesn't
+      // keep re-suggesting a room the user may have already left.
+      window.history.replaceState({}, '', window.location.pathname);
     }
 
     return () => { socket.off('roomUpdated'); };
@@ -265,6 +275,7 @@ export default function App() {
             onSetTeamAi={handleSetTeamAi}
             onSetRoomConfig={handleSetRoomConfig}
             userTeamId={userTeamId}
+            sharedRoomCode={sharedRoomCode}
           />
         )}
         {room && activeTab === 'AUCTION' && (

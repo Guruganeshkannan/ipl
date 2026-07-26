@@ -184,16 +184,26 @@
   pointer-events: none;
   z-index: 5;
   gap: 10px;
+  /* Fully opaque (not just dimmed) so the underlying live auction content —
+     team name, bid amount — is completely hidden rather than bleeding
+     through and colliding with the stamp's own text on narrow screens. */
+  background: var(--ink-0);
+}
+@media (max-width: 480px) {
+  .sold-stamp { gap: 4px; padding: 0 16px; text-align: center; }
 }
 .sold-stamp h1 {
   font-family: var(--font-display);
-  font-size: clamp(48px, 10vw, 110px);
+  font-size: clamp(40px, 10vw, 110px);
   color: var(--live);
   letter-spacing: 0.02em;
   text-shadow: 0 0 50px rgba(var(--live-rgb), 0.5);
   line-height: 1;
   transform: rotate(-4deg);
   animation: stampIn 0.5s var(--ease-spring);
+}
+@media (max-width: 480px) {
+  .sold-stamp h1 { font-size: clamp(32px, 12vw, 60px); }
 }
 @keyframes stampIn {
   0% { transform: rotate(-4deg) scale(0.6); opacity: 0; }
@@ -364,10 +374,12 @@
 @media (max-width: 600px) {
   .navbar-tab span.tab-label { display: none; }
   .navbar-team-badge span.team-label { display: none; }
+  .navbar-share-btn .share-btn-label { display: none; }
+  .navbar-share-btn { padding: 8px; }
 }
 @media (max-width: 480px) {
-  .navbar-inner { padding: 0 10px; gap: 8px; }
-  .navbar-right { gap: 5px; }
+  .navbar-inner { padding: 0 10px; gap: 6px; }
+  .navbar-right { gap: 4px; }
   .navbar-tabs { gap: 0; padding: 3px; }
   .navbar-tab { padding: 7px 9px; }
   .navbar-room-code { padding: 6px 8px; }
@@ -375,6 +387,23 @@
   .navbar-team-badge { padding: 6px 8px; }
   .navbar-icon-btn { width: 30px; height: 30px; }
   .badge.badge-signal { padding: 4px 7px; font-size: 10px; }
+}
+@media (max-width: 380px) {
+  /* room-code + share + team badge + HOST + pause/reset/leave genuinely
+     can't all fit on the smallest phones — drop Share from the navbar
+     (it's still reachable from the Lobby) so Leave/Pause/Reset, the
+     controls that matter mid-game, are never pushed out of reach. */
+  .navbar-share-btn { display: none; }
+  .navbar-code-value { font-size: 12px; letter-spacing: 0.04em; }
+  .navbar-room-code { padding: 6px 6px; }
+  .navbar-team-badge { padding: 5px 6px; }
+  .navbar-right { gap: 3px; }
+}
+@media (max-width: 340px) {
+  /* Down to the very smallest phones: the HOST text badge is the least
+     essential piece of chrome here (the host already sees their own
+     pause/reset controls) — drop it before anything load-bearing. */
+  .navbar-right .badge.badge-signal { display: none; }
 }
 
 /* =====================================================================
@@ -650,6 +679,16 @@
 }
 .squad-modal-row:hover { background: var(--ink-3); }
 
+.share-fallback-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--ink-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+  overflow: hidden;
+}
+
 .chat-dock {
   flex: 1;
   display: flex;
@@ -724,6 +763,11 @@
   border-radius: var(--radius-xl);
   background: var(--ink-2);
   border: 1px solid var(--line-2);
+  max-width: 100%;
+}
+@media (max-width: 480px) {
+  .auction-action-bar { gap: 10px; padding: 10px 14px; flex-wrap: wrap; justify-content: center; }
+  .auction-action-bar .btn-lg { font-size: 14px; padding: 12px 18px; }
 }
 
 .upcoming-panel {

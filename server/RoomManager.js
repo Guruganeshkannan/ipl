@@ -19,6 +19,7 @@ const ACCEL_TIMER_START = 5;        // shorter clock in the accelerated round
 const BASE_TIMER_START = 8;
 const BID_RESET_TIMER = 6;
 const MOVE_AUTO_PICK_TICKS = 15;    // ~18s of no input before auto-play
+const BOWLER_PICK_WAIT_TICKS = 6;   // ~7.2s to pick a bowler before auto-pick — much simpler choice than a hand-cricket ball, so it should never make the match feel stalled
 const TOSS_WAIT_TICKS = 10;         // ~12s for the toss-winning human to choose bat/bowl
 const TOSS_RESULT_HOLD_TICKS = 3;   // ~3.6s showing who's batting/bowling before the first ball
 const MARQUEE_RATING_FLOOR = 95;
@@ -802,6 +803,7 @@ export class Room {
       tossWaitTicks: 0,
       lastBallEvent: null, // 'SIX' | 'FOUR' | 'WICKET' | null — for client-side celebration animations
       lastBallSeq: 0,      // increments every resolved ball, so repeats of the same event still trigger a fresh celebration
+      bowlerWaitTicks: 0,  // separate from waitTicks (the hand-choice countdown) so the two waits don't stomp each other's UI
       commentary: [`Match scheduled between ${team1Id} and ${team2Id}`],
       recentChoices: { [team1Id]: [], [team2Id]: [] },
       waitTicks: 0,
@@ -1036,6 +1038,7 @@ export class Room {
     if (bowled >= this.maxOversPerBowler()) return { ok: false, reason: 'OVERS_LIMIT' };
     match.currentBowlerId[teamId] = playerId;
     match.awaitingBowlerFor = null;
+    match.bowlerWaitTicks = 0;
     return { ok: true };
   }
 
@@ -1088,9 +1091,11 @@ export class Room {
         match.currentBowlerId[match.bowlingTeamId] = this.autoPickBowler(match, match.bowlingTeamId);
       } else {
         match.awaitingBowlerFor = match.bowlingTeamId;
-        match.waitTicks = (match.waitTicks || 0) + 1;
-        if (match.waitTicks < MOVE_AUTO_PICK_TICKS) return;
+        match.bowlerWaitTicks = (match.bowlerWaitTicks || 0) + 1;
+        if (match.bowlerWaitTicks < BOWLER_PICK_WAIT_TICKS) return;
         match.currentBowlerId[match.bowlingTeamId] = this.autoPickBowler(match, match.bowlingTeamId);
+        match.bowlerWaitTicks = 0;
+        match.awaitingBowlerFor = null;
         match.commentary.unshift(`⏱ ${bowlTeam.shortName} auto-selected a bowler — no pick in time.`);
       }
     }

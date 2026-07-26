@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, ArrowRight, Play, Cpu, UserCheck, X, Settings2 } from 'lucide-react';
+import ShareRoomButton from './ShareRoomButton';
 
 const AI_MODES = [
   { value: 'passive', label: 'Passive AI' },
@@ -7,15 +8,32 @@ const AI_MODES = [
   { value: 'aggressive', label: 'Aggressive AI' },
 ];
 
-export default function LobbyView({ room, catalog, isHost, hostTeamId, playerName, onSetPlayerName, joinError, onCreateRoom, onJoinRoom, onStartAuction, onRemoveTeam, onAddTeam, onSetTeamAi, onSetRoomConfig, userTeamId }) {
-  const [inputCode, setInputCode] = useState('');
+export default function LobbyView({ room, catalog, isHost, hostTeamId, playerName, onSetPlayerName, joinError, onCreateRoom, onJoinRoom, onStartAuction, onRemoveTeam, onAddTeam, onSetTeamAi, onSetRoomConfig, userTeamId, sharedRoomCode }) {
+  const [inputCode, setInputCode] = useState(sharedRoomCode || '');
   const [overs, setOvers] = useState(2);
   const [squadLimit, setSquadLimit] = useState(7);
   const [showConfig, setShowConfig] = useState(false);
   const [nameInput, setNameInput] = useState(playerName || '');
+  const [nameWarning, setNameWarning] = useState(false);
+
+  // A shared invite link (?room=CODE) prefills the join box even if this
+  // component mounted before the code was read from the URL.
+  useEffect(() => {
+    if (sharedRoomCode) setInputCode(sharedRoomCode);
+  }, [sharedRoomCode]);
 
   const effectiveName = () => nameInput.trim();
   const hasName = nameInput.trim().length > 0;
+
+  // Surfaces an active "enter your name" warning instead of silently doing
+  // nothing when someone taps Join/Claim before typing a name. Returns
+  // whether the action should proceed.
+  const requireName = () => {
+    if (hasName) return true;
+    setNameWarning(true);
+    setTimeout(() => setNameWarning(false), 3000);
+    return false;
+  };
 
   if (!room) {
     return (
@@ -34,9 +52,12 @@ export default function LobbyView({ room, catalog, isHost, hostTeamId, playerNam
             placeholder="How should we show your name?"
             value={nameInput}
             maxLength={24}
+            style={{ borderColor: nameWarning ? 'var(--live-red)' : undefined }}
             onChange={e => { setNameInput(e.target.value); onSetPlayerName(e.target.value); }}
           />
-          {!hasName && (
+          {nameWarning ? (
+            <p style={{ color: 'var(--live-red)', fontSize: 12, marginTop: 6, fontWeight: 600 }}>⚠ Enter your name before creating or joining a room.</p>
+          ) : (
             <p style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 6 }}>Enter your name to create or join a room.</p>
           )}
         </div>
@@ -75,9 +96,7 @@ export default function LobbyView({ room, catalog, isHost, hostTeamId, playerNam
             <button
               className="btn btn-signal btn-lg"
               style={{ width: '100%' }}
-              onClick={() => onCreateRoom(overs, squadLimit)}
-              disabled={!hasName}
-              title={hasName ? '' : 'Enter your name first'}
+              onClick={() => requireName() && onCreateRoom(overs, squadLimit)}
             >
               Create room
             </button>
@@ -112,9 +131,8 @@ export default function LobbyView({ room, catalog, isHost, hostTeamId, playerNam
             <button
               className="btn btn-lg"
               style={{ width: '100%', background: 'var(--info-cyan)', color: '#04202b' }}
-              onClick={() => inputCode && hasName && onJoinRoom(inputCode, null, effectiveName())}
-              disabled={!inputCode || !hasName}
-              title={!hasName ? 'Enter your name first' : ''}
+              onClick={() => inputCode && requireName() && onJoinRoom(inputCode, null, effectiveName())}
+              disabled={!inputCode}
             >
               Join room
             </button>
@@ -139,14 +157,20 @@ export default function LobbyView({ room, catalog, isHost, hostTeamId, playerNam
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            className="input-field"
-            style={{ width: 160, maxWidth: '100%', flex: '1 1 140px' }}
-            placeholder="Your name"
-            value={nameInput}
-            maxLength={24}
-            onChange={e => { setNameInput(e.target.value); onSetPlayerName(e.target.value); }}
-          />
+          <div>
+            <input
+              className="input-field"
+              style={{ width: 160, maxWidth: '100%', flex: '1 1 140px', borderColor: nameWarning ? 'var(--live-red)' : undefined }}
+              placeholder="Your name"
+              value={nameInput}
+              maxLength={24}
+              onChange={e => { setNameInput(e.target.value); onSetPlayerName(e.target.value); }}
+            />
+            {nameWarning && (
+              <p style={{ color: 'var(--live-red)', fontSize: 11, marginTop: 4, fontWeight: 600 }}>⚠ Enter your name first</p>
+            )}
+          </div>
+          <ShareRoomButton roomCode={room.code} />
           {isHost && (
             <button className="btn btn-ghost" onClick={() => setShowConfig(v => !v)}>
               <Settings2 size={16} /> Room settings
@@ -255,7 +279,7 @@ export default function LobbyView({ room, catalog, isHost, hostTeamId, playerNam
               <button
                 className={`btn btn-sm ${isUser ? 'btn-signal' : 'btn-ghost'}`}
                 style={{ width: '100%', marginTop: 'auto' }}
-                onClick={() => onJoinRoom(room.code, team.id, effectiveName())}
+                onClick={() => requireName() && onJoinRoom(room.code, team.id, effectiveName())}
                 disabled={isUser || (isOccupied && !isUser)}
               >
                 {isUser ? 'Your team' : isOccupied ? 'Taken' : 'Claim'}
