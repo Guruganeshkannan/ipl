@@ -145,6 +145,18 @@ export default function App() {
     });
   };
 
+  const handleSkipAuction = () => {
+    if (!room) return;
+    if (!confirm('Skip the auction? Squads will be randomly dealt out instantly and you\'ll go straight to the matches.')) return;
+    socket.emit('skipAuction', { roomCode: room.code, hostToken: getHostToken() }, (res) => {
+      if (res && !res.ok) {
+        alert(res.reason === 'NOT_AUTHORIZED' ? 'Only the host can skip the auction.' : "Can't skip the auction right now.");
+        return;
+      }
+      setActiveTab('MATCHES');
+    });
+  };
+
   const handleRemoveTeam = (teamId) => {
     if (!room) return;
     socket.emit('removeTeam', { roomCode: room.code, teamId, hostToken: getHostToken() }, (res) => {
@@ -270,6 +282,7 @@ export default function App() {
             onCreateRoom={handleCreateRoom}
             onJoinRoom={handleJoinRoom}
             onStartAuction={handleStartAuction}
+            onSkipAuction={handleSkipAuction}
             onRemoveTeam={handleRemoveTeam}
             onAddTeam={handleAddTeam}
             onSetTeamAi={handleSetTeamAi}

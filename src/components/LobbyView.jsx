@@ -8,7 +8,7 @@ const AI_MODES = [
   { value: 'aggressive', label: 'Aggressive AI' },
 ];
 
-export default function LobbyView({ room, catalog, isHost, hostTeamId, playerName, onSetPlayerName, joinError, onCreateRoom, onJoinRoom, onStartAuction, onRemoveTeam, onAddTeam, onSetTeamAi, onSetRoomConfig, userTeamId, sharedRoomCode }) {
+export default function LobbyView({ room, catalog, isHost, hostTeamId, playerName, onSetPlayerName, joinError, onCreateRoom, onJoinRoom, onStartAuction, onSkipAuction, onRemoveTeam, onAddTeam, onSetTeamAi, onSetRoomConfig, userTeamId, sharedRoomCode }) {
   const [inputCode, setInputCode] = useState(sharedRoomCode || '');
   const [overs, setOvers] = useState(2);
   const [squadLimit, setSquadLimit] = useState(7);
@@ -86,6 +86,7 @@ export default function LobbyView({ room, catalog, isHost, hostTeamId, playerNam
               <div>
                 <label className="label">Squad size</label>
                 <select className="input-field" value={squadLimit} onChange={e => setSquadLimit(Number(e.target.value))}>
+                  <option value={5}>5 players per team</option>
                   <option value={7}>7 players per team</option>
                   <option value={11}>11 players per team</option>
                 </select>
@@ -184,6 +185,14 @@ export default function LobbyView({ room, catalog, isHost, hostTeamId, playerNam
           >
             <Play size={17} style={{ fill: 'currentColor' }} /> Start auction
           </button>
+          <button
+            className="btn btn-ghost btn-lg"
+            onClick={onSkipAuction}
+            disabled={!isHost}
+            title={isHost ? 'Randomly deal squads and jump straight to the matches' : 'Only the host can skip the auction'}
+          >
+            <ArrowRight size={17} /> Skip auction
+          </button>
         </div>
       </div>
       {!isHost && (
@@ -206,6 +215,7 @@ export default function LobbyView({ room, catalog, isHost, hostTeamId, playerNam
             <div className="config-field">
               <label className="label">Squad size</label>
               <select className="input-field" defaultValue={room.maxSquadSize} onChange={e => onSetRoomConfig({ maxSquadSize: Number(e.target.value) })}>
+                <option value={5}>5 players</option>
                 <option value={7}>7 players</option>
                 <option value={11}>11 players</option>
                 <option value={15}>15 players</option>

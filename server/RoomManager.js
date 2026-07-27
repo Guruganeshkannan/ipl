@@ -361,17 +361,21 @@ export class Room {
     let pool = shuffleArray(rawPlayersData);
     const targetSize = this.poolSize || Math.round(this.teams.length * this.maxSquadSize * POOL_SIZE_MULTIPLIER);
     if (targetSize < pool.length) {
-      const marquee = pool.filter(p => p.rating >= MARQUEE_RATING_FLOOR)
-        .sort((a, b) => b.rating - a.rating).slice(0, MARQUEE_MAX);
-      const marqueeIds = new Set(marquee.map(p => p.id));
-      const rest = pool.filter(p => !marqueeIds.has(p.id));
+      // pool is already shuffled (line 361), so slicing straight off it picks a
+      // random subset each time. Sorting by rating here before slicing would pick
+      // the exact same highest-rated players on every auction, defeating the shuffle.
+      const marquee = pool.filter(p => p.rating >= MARQUEE_RATING_FLOOR).slice(0, MARQUEE_MAX);
+      // Exclude every marquee-floor player from the tail (not just the ones chosen
+      // above), so buildAuctionSets' own floor-based marquee lookup stays in sync
+      // with this random pick instead of re-sorting a different subset into "marquee".
+      const rest = pool.filter(p => p.rating < MARQUEE_RATING_FLOOR);
 
-      // Role-balanced tail: proportionally fill remaining slots per role, highest rated first.
+      // Role-balanced tail: proportionally fill remaining slots per role, randomly.
       const remainingSlots = Math.max(0, targetSize - marquee.length);
       const roles = Object.keys(ROLE_TARGET_SHARE);
       const byRole = {};
       roles.forEach(r => {
-        byRole[r] = rest.filter(p => p.role === r).sort((a, b) => b.rating - a.rating);
+        byRole[r] = rest.filter(p => p.role === r);
       });
       const tail = [];
       roles.forEach(r => {
@@ -381,7 +385,7 @@ export class Room {
       // Top up/trim to exact target size if rounding left a gap.
       const tailIds = new Set(tail.map(p => p.id));
       if (tail.length < remainingSlots) {
-        const leftovers = rest.filter(p => !tailIds.has(p.id)).sort((a, b) => b.rating - a.rating);
+        const leftovers = rest.filter(p => !tailIds.has(p.id));
         tail.push(...leftovers.slice(0, remainingSlots - tail.length));
       }
       pool = [...marquee, ...tail.slice(0, remainingSlots)];
@@ -419,6 +423,22 @@ export class Room {
     this.auction.holdTicks = 0;
     this._recomputeRemainingCount();
     this.advanceAuctionCursor();
+  }
+
+  // Bypasses bidding entirely: builds the same pool startAuction() would,
+  // then hands it straight to finishAuction()'s auto-fill so squads,
+  // pricing, team strength, and the schedule come out exactly as they
+  // would if every player had gone unsold and been auto-dealt at the end.
+  skipAuction() {
+    this.fillAiTeams();
+    this.teams.forEach(t => { t.rtmCardsLeft = 0; });
+
+    const pool = this.buildAuctionPool();
+    this.auction.sets = this.buildAuctionSets(pool);
+    this.auction.unsoldQueue = [];
+    this.auction.soldLog = [];
+
+    this.finishAuction();
   }
 
   _findPlayer(id) {
@@ -786,6 +806,7 @@ export class Room {
       team2Id,
       battingTeamId: team1Id,
       bowlingTeamId: team2Id,
+      firstInningsBattingTeamId: team1Id,
       innings: 1,
       runs1: 0,
       wickets1: 0,
@@ -993,6 +1014,9 @@ export class Room {
     const loserId = winnerId === match.team1Id ? match.team2Id : match.team1Id;
     match.battingTeamId = choice === 'bat' ? winnerId : loserId;
     match.bowlingTeamId = choice === 'bat' ? loserId : winnerId;
+    // Stable record of who batted in innings 1, independent of team1Id/team2Id
+    // position and unaffected by the innings-swap later flipping battingTeamId.
+    match.firstInningsBattingTeamId = match.battingTeamId;
     const winnerTeam = this.teams.find(t => t.id === winnerId);
     match.commentary.unshift(`${winnerTeam.shortName} chose to ${choice.toUpperCase()} first.`);
     match.status = 'TOSS_RESULT';
@@ -1293,15 +1317,24 @@ export class Room {
         t1.played += 1;
         t2.played += 1;
 
-        t1.runsScored += m.runs1;
-        t1.oversFaced += Math.floor(m.overs1) + (m.overs1 % 1) * 10 / 6;
-        t1.runsConceded += m.runs2;
-        t1.oversBowled += Math.floor(m.overs2) + (m.overs2 % 1) * 10 / 6;
+        // runs1/overs1 belong to whichever team actually batted in innings 1
+        // (decided by the toss, not by team1Id/team2Id position) - the reverse
+        // of the innings-swap flag makes team1's stats1/stats2 line up correctly.
+        const t1BattedFirst = m.firstInningsBattingTeamId === m.team1Id;
+        const t1Runs = t1BattedFirst ? m.runs1 : m.runs2;
+        const t1Overs = t1BattedFirst ? m.overs1 : m.overs2;
+        const t2Runs = t1BattedFirst ? m.runs2 : m.runs1;
+        const t2Overs = t1BattedFirst ? m.overs2 : m.overs1;
 
-        t2.runsScored += m.runs2;
-        t2.oversFaced += Math.floor(m.overs2) + (m.overs2 % 1) * 10 / 6;
-        t2.runsConceded += m.runs1;
-        t2.oversBowled += Math.floor(m.overs1) + (m.overs1 % 1) * 10 / 6;
+        t1.runsScored += t1Runs;
+        t1.oversFaced += Math.floor(t1Overs) + (t1Overs % 1) * 10 / 6;
+        t1.runsConceded += t2Runs;
+        t1.oversBowled += Math.floor(t2Overs) + (t2Overs % 1) * 10 / 6;
+
+        t2.runsScored += t2Runs;
+        t2.oversFaced += Math.floor(t2Overs) + (t2Overs % 1) * 10 / 6;
+        t2.runsConceded += t1Runs;
+        t2.oversBowled += Math.floor(t1Overs) + (t1Overs % 1) * 10 / 6;
 
         if (m.winnerId === m.team1Id) {
           t1.won += 1; t1.points += 2; t2.lost += 1;

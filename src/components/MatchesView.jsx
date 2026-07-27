@@ -231,10 +231,13 @@ export default function MatchesView({ room, onSelectChoice, onLeave, userTeamId,
     const userFranchise = teams.find(t => t.id === userTeamId);
     const oppFranchise = teams.find(t => t.id === oppTeamId);
 
-    const userRuns = isTeam1 ? userMatch.runs1 : userMatch.runs2;
-    const userWkts = isTeam1 ? userMatch.wickets1 : userMatch.wickets2;
-    const oppRuns = isTeam1 ? userMatch.runs2 : userMatch.runs1;
-    const oppWkts = isTeam1 ? userMatch.wickets2 : userMatch.wickets1;
+    // runs1/wickets1 belong to whoever the toss sent in to bat first, which is
+    // not always team1Id - key off firstInningsBattingTeamId, not isTeam1.
+    const userBattedFirst = userMatch.firstInningsBattingTeamId === userTeamId;
+    const userRuns = userBattedFirst ? userMatch.runs1 : userMatch.runs2;
+    const userWkts = userBattedFirst ? userMatch.wickets1 : userMatch.wickets2;
+    const oppRuns = userBattedFirst ? userMatch.runs2 : userMatch.runs1;
+    const oppWkts = userBattedFirst ? userMatch.wickets2 : userMatch.wickets1;
 
     const currentOvers = userMatch.innings === 1 ? userMatch.overs1 : userMatch.overs2;
 
@@ -408,8 +411,14 @@ function MatchesGrid({ room, currentRoundObj, teams, isPaused, userTeamId }) {
                 )}
               </div>
 
-              {[{ team: t1, runs: match.runs1, wkts: match.wickets1, overs: match.overs1 },
-                { team: t2, runs: match.runs2, wkts: match.wickets2, overs: match.overs2 }].map(({ team, runs, wkts, overs }, i) => (
+              {/* runs1/wickets1 belong to whoever the toss sent in to bat first,
+                  which is not always team1 - pair by firstInningsBattingTeamId. */}
+              {(match.firstInningsBattingTeamId === match.team1Id
+                ? [{ team: t1, runs: match.runs1, wkts: match.wickets1, overs: match.overs1 },
+                   { team: t2, runs: match.runs2, wkts: match.wickets2, overs: match.overs2 }]
+                : [{ team: t1, runs: match.runs2, wkts: match.wickets2, overs: match.overs2 },
+                   { team: t2, runs: match.runs1, wkts: match.wickets1, overs: match.overs1 }]
+              ).map(({ team, runs, wkts, overs }, i) => (
                 <div key={i} className={`match-row ${match.battingTeamId === team.id ? 'is-batting' : ''}`}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                     <span style={{ fontSize: 20 }}>{team.logo}</span>
