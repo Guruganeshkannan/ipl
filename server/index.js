@@ -167,6 +167,18 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('skipAuction', ({ roomCode, hostToken }, callback) => {
+    const room = requireHost(socket, roomCode, hostToken);
+    if (!room) { if (callback) callback({ ok: false, reason: 'NOT_AUTHORIZED' }); return; }
+    if (room.status === 'LOBBY' || room.status === 'FINISHED') {
+      room.skipAuction();
+      broadcastRoom(roomCode);
+      if (callback) callback({ ok: true });
+    } else if (callback) {
+      callback({ ok: false, reason: 'WRONG_STATUS' });
+    }
+  });
+
   socket.on('placeBid', ({ roomCode, teamId }, callback) => {
     const auth = authTeam(socket, roomCode, teamId);
     if (!auth) { if (callback) callback({ ok: false, reason: 'NOT_AUTHORIZED' }); return; }

@@ -8,7 +8,7 @@ const AI_MODES = [
   { value: 'aggressive', label: 'Aggressive AI' },
 ];
 
-export default function LobbyView({ room, catalog, isHost, hostTeamId, playerName, onSetPlayerName, joinError, onCreateRoom, onJoinRoom, onStartAuction, onRemoveTeam, onAddTeam, onSetTeamAi, onSetRoomConfig, userTeamId, sharedRoomCode }) {
+export default function LobbyView({ room, catalog, isHost, hostTeamId, playerName, onSetPlayerName, joinError, onCreateRoom, onJoinRoom, onStartAuction, onSkipAuction, onRemoveTeam, onAddTeam, onSetTeamAi, onSetRoomConfig, userTeamId, sharedRoomCode }) {
   const [inputCode, setInputCode] = useState(sharedRoomCode || '');
   const [overs, setOvers] = useState(2);
   const [squadLimit, setSquadLimit] = useState(7);
@@ -184,6 +184,14 @@ export default function LobbyView({ room, catalog, isHost, hostTeamId, playerNam
             title={isHost ? '' : 'Only the host can start the auction'}
           >
             <Play size={17} style={{ fill: 'currentColor' }} /> Start auction
+          </button>
+          <button
+            className="btn btn-ghost btn-lg"
+            onClick={onSkipAuction}
+            disabled={!isHost}
+            title={isHost ? 'Randomly deal squads and jump straight to the matches' : 'Only the host can skip the auction'}
+          >
+            <ArrowRight size={17} /> Skip auction
           </button>
         </div>
       </div>

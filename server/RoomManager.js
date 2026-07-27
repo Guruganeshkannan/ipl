@@ -425,6 +425,22 @@ export class Room {
     this.advanceAuctionCursor();
   }
 
+  // Bypasses bidding entirely: builds the same pool startAuction() would,
+  // then hands it straight to finishAuction()'s auto-fill so squads,
+  // pricing, team strength, and the schedule come out exactly as they
+  // would if every player had gone unsold and been auto-dealt at the end.
+  skipAuction() {
+    this.fillAiTeams();
+    this.teams.forEach(t => { t.rtmCardsLeft = 0; });
+
+    const pool = this.buildAuctionPool();
+    this.auction.sets = this.buildAuctionSets(pool);
+    this.auction.unsoldQueue = [];
+    this.auction.soldLog = [];
+
+    this.finishAuction();
+  }
+
   _findPlayer(id) {
     return rawPlayersData.find(p => p.id === id);
   }
