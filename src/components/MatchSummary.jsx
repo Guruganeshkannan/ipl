@@ -58,16 +58,27 @@ export default function MatchSummary({ match, teams, onClose }) {
           <span className="summary-subtitle">{match.name || 'League stage'}</span>
         </div>
 
-        <InningsBlock
-          team={t1} runs={match.runs1} wickets={match.wickets1} overs={match.overs1}
-          battersOf={topPerformers(match, t1.id, 'runs', 3)}
-          bowlersOf={topPerformers(match, t2.id, 'wickets', 3)}
-        />
-        <InningsBlock
-          team={t2} runs={match.runs2} wickets={match.wickets2} overs={match.overs2}
-          battersOf={topPerformers(match, t2.id, 'runs', 3)}
-          bowlersOf={topPerformers(match, t1.id, 'wickets', 3)}
-        />
+        {/* runs1/wickets1 belong to whoever the toss sent in to bat first,
+            which is not always team1 - pair blocks by firstInningsBattingTeamId. */}
+        {(() => {
+          const t1BattedFirst = match.firstInningsBattingTeamId === match.team1Id;
+          const firstTeam = t1BattedFirst ? t1 : t2;
+          const secondTeam = t1BattedFirst ? t2 : t1;
+          return (
+            <>
+              <InningsBlock
+                team={firstTeam} runs={match.runs1} wickets={match.wickets1} overs={match.overs1}
+                battersOf={topPerformers(match, firstTeam.id, 'runs', 3)}
+                bowlersOf={topPerformers(match, secondTeam.id, 'wickets', 3)}
+              />
+              <InningsBlock
+                team={secondTeam} runs={match.runs2} wickets={match.wickets2} overs={match.overs2}
+                battersOf={topPerformers(match, secondTeam.id, 'runs', 3)}
+                bowlersOf={topPerformers(match, firstTeam.id, 'wickets', 3)}
+              />
+            </>
+          );
+        })()}
 
         <div className="summary-result-bar">{resultText}</div>
 

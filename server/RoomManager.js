@@ -790,6 +790,7 @@ export class Room {
       team2Id,
       battingTeamId: team1Id,
       bowlingTeamId: team2Id,
+      firstInningsBattingTeamId: team1Id,
       innings: 1,
       runs1: 0,
       wickets1: 0,
@@ -997,6 +998,9 @@ export class Room {
     const loserId = winnerId === match.team1Id ? match.team2Id : match.team1Id;
     match.battingTeamId = choice === 'bat' ? winnerId : loserId;
     match.bowlingTeamId = choice === 'bat' ? loserId : winnerId;
+    // Stable record of who batted in innings 1, independent of team1Id/team2Id
+    // position and unaffected by the innings-swap later flipping battingTeamId.
+    match.firstInningsBattingTeamId = match.battingTeamId;
     const winnerTeam = this.teams.find(t => t.id === winnerId);
     match.commentary.unshift(`${winnerTeam.shortName} chose to ${choice.toUpperCase()} first.`);
     match.status = 'TOSS_RESULT';
@@ -1297,15 +1301,24 @@ export class Room {
         t1.played += 1;
         t2.played += 1;
 
-        t1.runsScored += m.runs1;
-        t1.oversFaced += Math.floor(m.overs1) + (m.overs1 % 1) * 10 / 6;
-        t1.runsConceded += m.runs2;
-        t1.oversBowled += Math.floor(m.overs2) + (m.overs2 % 1) * 10 / 6;
+        // runs1/overs1 belong to whichever team actually batted in innings 1
+        // (decided by the toss, not by team1Id/team2Id position) - the reverse
+        // of the innings-swap flag makes team1's stats1/stats2 line up correctly.
+        const t1BattedFirst = m.firstInningsBattingTeamId === m.team1Id;
+        const t1Runs = t1BattedFirst ? m.runs1 : m.runs2;
+        const t1Overs = t1BattedFirst ? m.overs1 : m.overs2;
+        const t2Runs = t1BattedFirst ? m.runs2 : m.runs1;
+        const t2Overs = t1BattedFirst ? m.overs2 : m.overs1;
 
-        t2.runsScored += m.runs2;
-        t2.oversFaced += Math.floor(m.overs2) + (m.overs2 % 1) * 10 / 6;
-        t2.runsConceded += m.runs1;
-        t2.oversBowled += Math.floor(m.overs1) + (m.overs1 % 1) * 10 / 6;
+        t1.runsScored += t1Runs;
+        t1.oversFaced += Math.floor(t1Overs) + (t1Overs % 1) * 10 / 6;
+        t1.runsConceded += t2Runs;
+        t1.oversBowled += Math.floor(t2Overs) + (t2Overs % 1) * 10 / 6;
+
+        t2.runsScored += t2Runs;
+        t2.oversFaced += Math.floor(t2Overs) + (t2Overs % 1) * 10 / 6;
+        t2.runsConceded += t1Runs;
+        t2.oversBowled += Math.floor(t1Overs) + (t1Overs % 1) * 10 / 6;
 
         if (m.winnerId === m.team1Id) {
           t1.won += 1; t1.points += 2; t2.lost += 1;
