@@ -86,6 +86,7 @@ export default function LobbyView({ room, catalog, isHost, hostTeamId, playerNam
               <div>
                 <label className="label">Squad size</label>
                 <select className="input-field" value={squadLimit} onChange={e => setSquadLimit(Number(e.target.value))}>
+                  <option value={5}>5 players per team</option>
                   <option value={7}>7 players per team</option>
                   <option value={11}>11 players per team</option>
                 </select>
@@ -206,6 +207,7 @@ export default function LobbyView({ room, catalog, isHost, hostTeamId, playerNam
             <div className="config-field">
               <label className="label">Squad size</label>
               <select className="input-field" defaultValue={room.maxSquadSize} onChange={e => onSetRoomConfig({ maxSquadSize: Number(e.target.value) })}>
+                <option value={5}>5 players</option>
                 <option value={7}>7 players</option>
                 <option value={11}>11 players</option>
                 <option value={15}>15 players</option>

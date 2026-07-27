@@ -361,17 +361,21 @@ export class Room {
     let pool = shuffleArray(rawPlayersData);
     const targetSize = this.poolSize || Math.round(this.teams.length * this.maxSquadSize * POOL_SIZE_MULTIPLIER);
     if (targetSize < pool.length) {
-      const marquee = pool.filter(p => p.rating >= MARQUEE_RATING_FLOOR)
-        .sort((a, b) => b.rating - a.rating).slice(0, MARQUEE_MAX);
-      const marqueeIds = new Set(marquee.map(p => p.id));
-      const rest = pool.filter(p => !marqueeIds.has(p.id));
+      // pool is already shuffled (line 361), so slicing straight off it picks a
+      // random subset each time. Sorting by rating here before slicing would pick
+      // the exact same highest-rated players on every auction, defeating the shuffle.
+      const marquee = pool.filter(p => p.rating >= MARQUEE_RATING_FLOOR).slice(0, MARQUEE_MAX);
+      // Exclude every marquee-floor player from the tail (not just the ones chosen
+      // above), so buildAuctionSets' own floor-based marquee lookup stays in sync
+      // with this random pick instead of re-sorting a different subset into "marquee".
+      const rest = pool.filter(p => p.rating < MARQUEE_RATING_FLOOR);
 
-      // Role-balanced tail: proportionally fill remaining slots per role, highest rated first.
+      // Role-balanced tail: proportionally fill remaining slots per role, randomly.
       const remainingSlots = Math.max(0, targetSize - marquee.length);
       const roles = Object.keys(ROLE_TARGET_SHARE);
       const byRole = {};
       roles.forEach(r => {
-        byRole[r] = rest.filter(p => p.role === r).sort((a, b) => b.rating - a.rating);
+        byRole[r] = rest.filter(p => p.role === r);
       });
       const tail = [];
       roles.forEach(r => {
@@ -381,7 +385,7 @@ export class Room {
       // Top up/trim to exact target size if rounding left a gap.
       const tailIds = new Set(tail.map(p => p.id));
       if (tail.length < remainingSlots) {
-        const leftovers = rest.filter(p => !tailIds.has(p.id)).sort((a, b) => b.rating - a.rating);
+        const leftovers = rest.filter(p => !tailIds.has(p.id));
         tail.push(...leftovers.slice(0, remainingSlots - tail.length));
       }
       pool = [...marquee, ...tail.slice(0, remainingSlots)];
