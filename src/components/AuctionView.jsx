@@ -148,7 +148,12 @@ export default function AuctionView({ room, playersById, onPlaceBid, onSendChat,
             Upcoming ({auction.remainingCount}) <ChevronDown size={14} />
           </button>
           {isHost && isBidding && (
-            <button className="btn btn-danger btn-sm" onClick={onSkipPlayer} title="Force this player to resolve now">
+            <button
+              className="btn btn-danger btn-sm"
+              onClick={onSkipPlayer}
+              disabled={!!auction.currentBidder}
+              title={auction.currentBidder ? "Can't skip once a bid has been placed" : 'Force this player to resolve now'}
+            >
               <SkipForward size={14} /> Skip
             </button>
           )}
